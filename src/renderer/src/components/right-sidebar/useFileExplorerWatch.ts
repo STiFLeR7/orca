@@ -8,6 +8,7 @@ import type {
 import type { InlineInput } from './file-explorer-inline-input-row'
 import { useAppStore } from '@/store'
 import { ORCA_WORKTREE_FILE_CHANGE_EVENT } from '@/hooks/worktree-file-change-event'
+import { ORCA_AGENT_FILE_ACTIVITY_EVENT } from '@/hooks/agent-file-activity-event'
 import { normalizeRuntimePathForComparison } from '../../../../shared/cross-platform-path'
 import {
   getFileExplorerOperationOwner,
@@ -237,6 +238,18 @@ export function useFileExplorerWatch({
         handleFsChanged(event.detail.payload)
       }
     }
+    // Why: agent hooks name the worktree, not paths; an overflow rereads expanded dirs and keeps the inline-input/drag deferral.
+    const handleAgentFileActivity = (
+      event: WindowEventMap[typeof ORCA_AGENT_FILE_ACTIVITY_EVENT]
+    ): void => {
+      if (event.detail?.worktreeId === currentWorktreeId) {
+        handleFsChanged({
+          worktreePath: currentWorktreePath,
+          events: [{ kind: 'overflow', absolutePath: currentWorktreePath }]
+        })
+      }
+    }
+    window.addEventListener(ORCA_AGENT_FILE_ACTIVITY_EVENT, handleAgentFileActivity)
     let unsubscribeListener: (() => void) | null = null
     if (activeRuntimeEnvironmentId?.trim() && activeWorktreeId) {
       // The app watcher owns recovery; a separate stream would strand this consumer after reconnect.
@@ -247,6 +260,7 @@ export function useFileExplorerWatch({
 
     return () => {
       disposed = true
+      window.removeEventListener(ORCA_AGENT_FILE_ACTIVITY_EVENT, handleAgentFileActivity)
       window.removeEventListener(ORCA_WORKTREE_FILE_CHANGE_EVENT, handleRuntimeChange)
       unsubscribeListener?.()
       if (activeResyncByWatchKey.get(currentWatchKey) === scheduler.requestFullRefresh) {

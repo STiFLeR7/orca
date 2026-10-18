@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as React from 'react'
 import { ORCA_TERMINAL_COMMAND_FINISHED_EVENT } from '@/hooks/terminal-command-finished-event'
+import { ORCA_AGENT_FILE_ACTIVITY_EVENT } from '@/hooks/agent-file-activity-event'
 
 type WorktreesChangedCallback = (data: { repoId: string }) => void
 type GitStatusMetadataChangedCallback = (data: { repoId: string; worktreePaths?: string[] }) => void
@@ -17,6 +18,7 @@ async function renderHookOnce(params: HookParams): Promise<{
   emitWorktreesChanged: (repoId: string) => void
   emitGitStatusMetadataChanged: (repoId: string, worktreePaths?: string[]) => void
   emitCommandFinished: (worktreeId: string) => void
+  emitAgentFileActivity: (worktreeId: string) => void
   onChangedSubscribe: ReturnType<typeof vi.fn>
   onGitStatusMetadataChangedSubscribe: ReturnType<typeof vi.fn>
   onChangedUnsubscribe: ReturnType<typeof vi.fn>
@@ -94,6 +96,10 @@ async function renderHookOnce(params: HookParams): Promise<{
       gitStatusMetadataChangedCallback?.(worktreePaths ? { repoId, worktreePaths } : { repoId }),
     emitCommandFinished: (worktreeId: string) => {
       const listener = windowListeners.get(ORCA_TERMINAL_COMMAND_FINISHED_EVENT)
+      listener?.({ detail: { worktreeId } } as unknown as Event)
+    },
+    emitAgentFileActivity: (worktreeId: string) => {
+      const listener = windowListeners.get(ORCA_AGENT_FILE_ACTIVITY_EVENT)
       listener?.({ detail: { worktreeId } } as unknown as Event)
     },
     onChangedSubscribe,
@@ -195,6 +201,22 @@ describe('useGitStatusPushSignalRefresh', () => {
     expect(fetchStatus).toHaveBeenCalledTimes(1)
   })
 
+  it('nudges status when an agent may have written files in the active worktree', async () => {
+    const fetchStatus = vi.fn()
+    const harness = await renderHookOnce({
+      activeRepoId: 'repo-1',
+      activeWorktreeId: 'wt-1',
+      enabled: true,
+      fetchStatus
+    })
+
+    harness.emitAgentFileActivity('wt-1')
+    expect(fetchStatus).toHaveBeenCalledTimes(1)
+
+    harness.emitAgentFileActivity('wt-other')
+    expect(fetchStatus).toHaveBeenCalledTimes(1)
+  })
+
   it('drops nudges while the window is hidden', async () => {
     const fetchStatus = vi.fn()
     const harness = await renderHookOnce({
@@ -208,6 +230,7 @@ describe('useGitStatusPushSignalRefresh', () => {
     harness.emitWorktreesChanged('repo-1')
     harness.emitGitStatusMetadataChanged('repo-1')
     harness.emitCommandFinished('wt-1')
+    harness.emitAgentFileActivity('wt-1')
     expect(fetchStatus).not.toHaveBeenCalled()
   })
 

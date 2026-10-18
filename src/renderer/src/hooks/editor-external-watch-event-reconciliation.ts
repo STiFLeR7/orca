@@ -236,14 +236,30 @@ export function buildEditorExternalWatchEventHandler(
   return { handleFsChanged, dispose }
 }
 
-export function collectOverflowEditorExternalReloadTargets(
-  target: Pick<EditorExternalWatchTarget, 'worktreeId' | 'worktreePath'> &
-    Partial<
-      Pick<
-        EditorExternalWatchTarget,
-        'connectionId' | 'runtimeEnvironmentId' | 'allowLocalWindowsWslAliases'
-      >
+type EditorExternalReloadTarget = Pick<EditorExternalWatchTarget, 'worktreeId' | 'worktreePath'> &
+  Partial<
+    Pick<
+      EditorExternalWatchTarget,
+      'connectionId' | 'runtimeEnvironmentId' | 'allowLocalWindowsWslAliases'
     >
+  >
+
+export function collectOverflowEditorExternalReloadTargets(
+  target: EditorExternalReloadTarget
+): EditorExternalWatchNotification[] {
+  return collectCleanEditorReloadTargets(target, 'clear-marks')
+}
+
+/** Clean tabs to re-read after an agent edit; tombstoned tabs keep their mark since no path evidence clears it. */
+export function collectAgentActivityEditorReloadTargets(
+  target: EditorExternalReloadTarget
+): EditorExternalWatchNotification[] {
+  return collectCleanEditorReloadTargets(target, 'skip-marked')
+}
+
+function collectCleanEditorReloadTargets(
+  target: EditorExternalReloadTarget,
+  externalMutationPolicy: 'clear-marks' | 'skip-marked'
 ): EditorExternalWatchNotification[] {
   const state = useAppStore.getState()
   const notifications: EditorExternalWatchNotification[] = []
@@ -257,6 +273,9 @@ export function collectOverflowEditorExternalReloadTargets(
       continue
     }
     if (file.externalMutation) {
+      if (externalMutationPolicy === 'skip-marked') {
+        continue
+      }
       state.setExternalMutation(file.id, null)
     }
     notifications.push({

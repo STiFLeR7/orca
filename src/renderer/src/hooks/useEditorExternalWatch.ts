@@ -8,8 +8,15 @@ import {
   selectEditorExternalWatchTargets,
   type EditorExternalWatchTarget
 } from './editor-external-watch-targets'
-import { buildEditorExternalWatchEventHandler } from './editor-external-watch-event-reconciliation'
-import { verifyLatchedEditorMoveDestinations } from './editor-external-watch-disk-verification'
+import {
+  buildEditorExternalWatchEventHandler,
+  collectAgentActivityEditorReloadTargets
+} from './editor-external-watch-event-reconciliation'
+import {
+  scheduleDebouncedEditorExternalReload,
+  verifyLatchedEditorMoveDestinations
+} from './editor-external-watch-disk-verification'
+import { ORCA_AGENT_FILE_ACTIVITY_EVENT } from './agent-file-activity-event'
 
 function warnExternalWatchFailure(target: EditorExternalWatchTarget, err: unknown): void {
   console.warn('[filesystem-watch] failed to watch worktree', {
@@ -111,6 +118,28 @@ export function useEditorExternalWatch(): void {
       targetsRef.current = []
       // Why: module-scoped reload timers survive StrictMode's synthetic cleanup; a late reload dispatch is harmless.
     }
+  }, [])
+
+  // Why: re-read the visible worktree's clean tabs when its agent edits, so a missed native event can't leave them stale.
+  useEffect(() => {
+    const handleAgentFileActivity = (
+      event: WindowEventMap[typeof ORCA_AGENT_FILE_ACTIVITY_EVENT]
+    ): void => {
+      const worktreeId = event.detail?.worktreeId
+      if (!worktreeId || worktreeId !== useAppStore.getState().activeWorktreeId) {
+        return
+      }
+      for (const target of targetsRef.current) {
+        if (target.worktreeId !== worktreeId) {
+          continue
+        }
+        for (const notification of collectAgentActivityEditorReloadTargets(target)) {
+          scheduleDebouncedEditorExternalReload(notification)
+        }
+      }
+    }
+    window.addEventListener(ORCA_AGENT_FILE_ACTIVITY_EVENT, handleAgentFileActivity)
+    return () => window.removeEventListener(ORCA_AGENT_FILE_ACTIVITY_EVENT, handleAgentFileActivity)
   }, [])
 }
 

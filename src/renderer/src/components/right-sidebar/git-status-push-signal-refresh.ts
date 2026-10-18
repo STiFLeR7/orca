@@ -4,6 +4,7 @@ import {
   ORCA_TERMINAL_COMMAND_FINISHED_EVENT,
   type TerminalCommandFinishedEventDetail
 } from '@/hooks/terminal-command-finished-event'
+import { ORCA_AGENT_FILE_ACTIVITY_EVENT } from '@/hooks/agent-file-activity-event'
 import type { GitStatusMetadataChangedEvent } from '../../../../shared/worktree/types'
 import { isGitStatusSignalForWorktree } from './git-status-signal-attribution'
 
@@ -81,9 +82,20 @@ export function useGitStatusPushSignalRefresh({
       }
       fetchStatusRef.current()
     }
+    // Why: hook-reported agent edits reach us even when native file events are late or dropped.
+    const handleAgentFileActivity = (
+      event: WindowEventMap[typeof ORCA_AGENT_FILE_ACTIVITY_EVENT]
+    ): void => {
+      if (event.detail?.worktreeId !== activeWorktreeId || !isWindowVisible()) {
+        return
+      }
+      fetchStatusRef.current()
+    }
     window.addEventListener(ORCA_TERMINAL_COMMAND_FINISHED_EVENT, handleCommandFinished)
+    window.addEventListener(ORCA_AGENT_FILE_ACTIVITY_EVENT, handleAgentFileActivity)
     return () => {
       window.removeEventListener(ORCA_TERMINAL_COMMAND_FINISHED_EVENT, handleCommandFinished)
+      window.removeEventListener(ORCA_AGENT_FILE_ACTIVITY_EVENT, handleAgentFileActivity)
     }
   }, [enabled, activeWorktreeId])
 }

@@ -4,6 +4,7 @@ import { useIpcEvents } from '../hooks/useIpcEvents'
 import { useAutomationDispatchEvents } from '../hooks/useAutomationDispatchEvents'
 import { useReadOnScreenAttention } from '../hooks/useReadOnScreenAttention'
 import { useEditorExternalWatch } from '../hooks/useEditorExternalWatch'
+import { useAgentFileActivitySignal } from '../hooks/useAgentFileActivitySignal'
 import { useAppMenuPaste } from '../hooks/useAppMenuPaste'
 import { useAppMenuSelectionActions } from '../hooks/useAppMenuSelectionActions'
 import { useLargeTextControlPaste } from '../hooks/useLargeTextControlPaste'
@@ -58,6 +59,8 @@ export function useAppShellServices(): void {
   useGitStatusPolling({ enabled: workspaceSessionReady })
   // Why: wire file-change watching at App level so the editor keeps hearing FS changes when Explorer unmounts (right-sidebar switches to Source Control/Checks).
   useEditorExternalWatch()
+  // Why: agent hook rows are a refresh signal independent of native file watching.
+  useAgentFileActivitySignal()
   useReadOnScreenAttention()
   useAppMenuPaste()
   useAppMenuSelectionActions()

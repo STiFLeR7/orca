@@ -71,3 +71,9 @@ export function programStatusAttentionLabel(attention: ProgramStatusAttention): 
       return 'Needs you'
   }
 }
+
+/** One line for a row: "Sign-in required: Session expired". */
+export function programStatusAttentionLine(attention: ProgramStatusAttention): string {
+  const label = programStatusAttentionLabel(attention)
+  return attention.message ? `${label}: ${attention.message}` : label
+}

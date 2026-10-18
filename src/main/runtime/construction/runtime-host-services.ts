@@ -96,6 +96,10 @@ export abstract class OrcaRuntimeWithPreservedBranchCleanup extends OrcaRuntimeW
 
   protected readonly onTerminalAgentStatus!: HostBindings['onTerminalAgentStatus'] | null
 
+  protected readonly onTerminalProgramStatusFacet!:
+    | HostBindings['onTerminalProgramStatusFacet']
+    | null
+
   protected readonly onTerminalSideEffects!: HostBindings['onTerminalSideEffects'] | null
 
   protected readonly onClaudeTerminalEvidence!: HostBindings['onClaudeTerminalEvidence'] | null

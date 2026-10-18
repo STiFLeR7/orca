@@ -15,6 +15,7 @@ export function agentHookRuntimeDeps(
     // Why: main's OSC parse is the only producer for a PTY agent, and this store is the only
     // place `worktree.ps` and the mobile projection read from.
     onTerminalAgentStatus: (event) => server.ingestTerminalStatus(event),
+    onTerminalProgramStatusFacet: (event) => server.ingestProgramStatusFacet(event),
     onClaudeTerminalEvidence: (paneKey, evidence) =>
       server.observeClaudeTerminalEvidence(paneKey, evidence),
     getAgentStatusSnapshot: () =>

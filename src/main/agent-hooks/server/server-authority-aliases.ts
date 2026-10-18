@@ -219,6 +219,9 @@ export abstract class AgentHookServerAuthorityAliases extends AgentHookServerAut
       this.activeHookTurnCompletedAtByPaneKey.delete(previousOwnerPaneKey)
       this.activeHookTurnCompletedAtByPaneKey.set(toPaneKey, activeTurnCompletedAt)
     }
+    this.programStatusFacets.move(previousOwnerPaneKey, toPaneKey)
+    this.hookSilenceRechecks.move(previousOwnerPaneKey, toPaneKey)
+    this.programStatusFacetRepublishes.move(previousOwnerPaneKey, toPaneKey)
     const evidenceObservedAt = this.evidenceObservedAtByPaneKey.get(previousOwnerPaneKey)
     if (evidenceObservedAt !== undefined) {
       this.evidenceObservedAtByPaneKey.delete(previousOwnerPaneKey)

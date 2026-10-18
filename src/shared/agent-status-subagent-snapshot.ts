@@ -27,7 +27,7 @@ export type AgentSubagentSnapshot = {
 /** Maximum subagent child rows carried per status entry. Bounds per-pane cache
  *  and IPC fanout against a runaway spawner. */
 export const AGENT_STATUS_MAX_SUBAGENTS = 32
-const AGENT_SUBAGENT_ID_MAX_LENGTH = 64
+export const AGENT_SUBAGENT_ID_MAX_LENGTH = 64
 
 function normalizeSubagentSnapshot(
   value: unknown,

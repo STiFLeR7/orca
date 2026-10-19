@@ -70,6 +70,15 @@ describe('client pane names on a host with its own desktop window', () => {
     expect(setPaneTitle).not.toHaveBeenCalled()
   })
 
+  it('fails the call when the window cannot take the name, so the client retries', async () => {
+    const { setPaneTitle, renamePanes } = desktopHostRuntime()
+    setPaneTitle.mockReturnValue(false)
+
+    await expect(renamePanes(SPLIT_ROOT, { [HEADLESS_LEAF_ID]: 'server' })).rejects.toThrow(
+      'runtime_unavailable'
+    )
+  })
+
   it("never turns the tab's own name into a single pane's name", async () => {
     const { setPaneTitle, renameTerminal, renamePanes } = desktopHostRuntime()
 

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { TerminalLayoutSnapshot } from '../../../../shared/terminal-tab-types'
 import { toRemoteRuntimePtyId } from '../../../../shared/remote-runtime-pty-id'
-import { hostPaneTitleUpdates, notePendingLocalPaneTitle } from './use-host-pane-title-sync'
+import { hostPaneTitleUpdates } from './use-host-pane-title-sync'
 
 const LEAF_ID = '11111111-1111-4111-8111-111111111111'
 const SIBLING_ID = '22222222-2222-4222-8222-222222222222'
@@ -31,7 +31,6 @@ function hostLayout(
 describe('open panes following host pane names (#30386)', () => {
   it('picks up a name the host set, and one it cleared', () => {
     const updates = hostPaneTitleUpdates({
-      tabId: 'tab-set',
       layout: hostLayout({ [LEAF_ID]: 'server' }),
       panes: PANES,
       shownTitles: { 2: 'old' }
@@ -42,9 +41,17 @@ describe('open panes following host pane names (#30386)', () => {
     ])
   })
 
+  it('changes nothing once the pane already shows the host name', () => {
+    const updates = hostPaneTitleUpdates({
+      layout: hostLayout({ [LEAF_ID]: 'server' }),
+      panes: PANES,
+      shownTitles: { 1: 'server' }
+    })
+    expect(updates.size).toBe(0)
+  })
+
   it('leaves a local tab alone, since its window owns it', () => {
     const updates = hostPaneTitleUpdates({
-      tabId: 'tab-local',
       layout: hostLayout({ [LEAF_ID]: 'server' }, 'local-pty'),
       panes: PANES,
       shownTitles: {}
@@ -52,29 +59,8 @@ describe('open panes following host pane names (#30386)', () => {
     expect(updates.size).toBe(0)
   })
 
-  it('keeps a local rename until the host echoes it, then follows the host again', () => {
-    const tabId = 'tab-pending'
-    notePendingLocalPaneTitle({ tabId, leafId: LEAF_ID, title: 'mine', layout: hostLayout() })
-    const shownTitles = { 1: 'mine' }
-
-    const stale = hostPaneTitleUpdates({ tabId, layout: hostLayout(), panes: PANES, shownTitles })
-    expect(stale.size).toBe(0)
-
-    const echoed = hostPaneTitleUpdates({
-      tabId,
-      layout: hostLayout({ [LEAF_ID]: 'mine' }),
-      panes: PANES,
-      shownTitles
-    })
-    expect(echoed.size).toBe(0)
-
-    const later = hostPaneTitleUpdates({ tabId, layout: hostLayout(), panes: PANES, shownTitles })
-    expect([...later]).toEqual([[1, null]])
-  })
-
   it('ignores a pane the host layout does not hold yet', () => {
     const updates = hostPaneTitleUpdates({
-      tabId: 'tab-new-leaf',
       layout: hostLayout(),
       panes: [...PANES, { id: 3, leafId: '33333333-3333-4333-8333-333333333333' }],
       shownTitles: { 3: 'fresh split' }

@@ -15,7 +15,7 @@ import type { TerminalPaneStartupController } from './use-terminal-pane-startup-
 import type { PaneLayoutEditIntent } from '../../../../shared/rpc-contract/session-tabs-schemas-params'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import { sendLayoutCommandToOwner } from '@/runtime/layout-owner-command'
-import { notePendingLocalPaneTitle } from './use-host-pane-title-sync'
+import { notePendingPaneTitleRename } from '@/runtime/pending-pane-title-renames'
 
 export function useTerminalPaneLayoutPersistence(controller: TerminalPaneStartupController) {
   const {
@@ -220,7 +220,7 @@ export function useTerminalPaneLayoutPersistence(controller: TerminalPaneStartup
       const leafId = managerRef.current?.getPanes().find((pane) => pane.id === paneId)?.leafId
       if (leafId) {
         const layout = useAppStore.getState().terminalLayoutsByTabId[tabId]
-        notePendingLocalPaneTitle({ tabId, leafId, title, layout })
+        notePendingPaneTitleRename({ leafId, title, layout })
       }
       // Switch point: main renames the pane first; the window then shows the title.
       if (

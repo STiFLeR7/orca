@@ -1,13 +1,31 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as EditorAutosave from '@/components/editor/editor-autosave'
 
-const { getState, notify, probePresence } = vi.hoisted(() => ({
-  getState: vi.fn(),
-  notify: vi.fn(),
-  probePresence: vi.fn()
-}))
+const { getState, notify, probePresence, listeners, callRuntimeRpc } = vi.hoisted(() => {
+  const storeListeners = new Set<(state: { openFiles: readonly { id?: unknown }[] }) => void>()
+  return {
+    getState: vi.fn(),
+    notify: vi.fn(),
+    probePresence: vi.fn(),
+    listeners: storeListeners,
+    callRuntimeRpc: vi.fn()
+  }
+})
 
-vi.mock('@/store', () => ({ useAppStore: { getState } }))
+vi.mock('@/store', () => ({
+  useAppStore: {
+    getState,
+    subscribe: (listener: (state: { openFiles: readonly { id?: unknown }[] }) => void) => {
+      listeners.add(listener)
+      return () => listeners.delete(listener)
+    }
+  }
+}))
+vi.mock('@/lib/file-owner-runtime-target', () => ({
+  getRuntimeTargetForFileOwner: (_state: unknown, _worktreeId: string, owner?: string | null) =>
+    owner ? { kind: 'environment', environmentId: owner } : { kind: 'local' }
+}))
+vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc }))
 vi.mock('@/components/editor/editor-autosave', async (importOriginal) => ({
   ...(await importOriginal<typeof EditorAutosave>()),
   notifyEditorExternalFileChange: notify
@@ -62,6 +80,7 @@ describe('refreshing tabs after a dropped watch returns', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
+    setExternalMutation.mockReset()
     vi.stubGlobal('window', { dispatchEvent })
     probePresence.mockResolvedValue('unknown')
     getState.mockReturnValue({ setExternalMutation, openFiles })
@@ -115,13 +134,18 @@ describe('refreshing tabs after a dropped watch returns', () => {
     expect(notified()).not.toContain('clean.ts')
   })
 
+  function setOpenFiles(next: Record<string, unknown>[]): void {
+    getState.mockReturnValue({ setExternalMutation, openFiles: next })
+    for (const listener of listeners) {
+      listener({ openFiles: next })
+    }
+  }
+
   it('drops a probe verdict once the tab was closed and reopened under the same id', async () => {
     probePresence.mockImplementation(async (_state, file) => {
       if (file.id === 'clean.ts') {
-        getState.mockReturnValue({
-          setExternalMutation,
-          openFiles: openFiles.map((f) => (f.id === 'clean.ts' ? { ...f } : f))
-        })
+        setOpenFiles(openFiles.filter((f) => f.id !== 'clean.ts'))
+        setOpenFiles(openFiles.map((f) => (f.id === 'clean.ts' ? { ...f } : f)))
         return 'missing'
       }
       return 'unknown'
@@ -129,6 +153,76 @@ describe('refreshing tabs after a dropped watch returns', () => {
     await catchUpEditorTabsAfterRewatch(target)
 
     expect(setExternalMutation).not.toHaveBeenCalledWith('clean.ts', 'deleted')
+  })
+
+  it('still refreshes a tab whose object was replaced by a benign update during the probe', async () => {
+    probePresence.mockImplementation(async (_state, file) => {
+      if (file.id === 'clean.ts') {
+        // Why: a late content read stamps a new baseline, replacing the tab object.
+        setOpenFiles(
+          openFiles.map((f) => (f.id === 'clean.ts' ? { ...f, lastKnownDiskSignature: 'new' } : f))
+        )
+        return 'present'
+      }
+      return 'unknown'
+    })
+    await catchUpEditorTabsAfterRewatch(target)
+
+    expect(notified()).toContain('clean.ts')
+  })
+
+  it('does not refresh a tab that became dirty during the probe', async () => {
+    probePresence.mockImplementation(async (_state, file) => {
+      if (file.id === 'clean.ts') {
+        setOpenFiles(openFiles.map((f) => (f.id === 'clean.ts' ? { ...f, isDirty: true } : f)))
+      }
+      return 'present'
+    })
+    await catchUpEditorTabsAfterRewatch(target)
+
+    expect(notified()).not.toContain('clean.ts')
+  })
+
+  it.each([
+    ['clears and reloads', () => Promise.resolve({ size: 1, isDirectory: false, mtime: 0 }), true],
+    ['keeps the mark when still missing', () => Promise.reject(new Error('ENOENT: gone')), false],
+    [
+      'keeps the mark when the host is unreachable',
+      () => Promise.reject(new Error('timeout')),
+      false
+    ]
+  ])('stats a runtime tombstone on its host: %s', async (_label, stat, cleared) => {
+    const runtimeTab = tab('rt.ts', {
+      filePath: '/repo/rt.ts',
+      runtimeEnvironmentId: 'env-1',
+      externalMutation: 'deleted'
+    })
+    getState.mockReturnValue({ setExternalMutation, openFiles: [runtimeTab] })
+    // Why: mirror the store so the cleared mark is visible to the reload's clean check.
+    setExternalMutation.mockImplementation((_id: string, mutation: string | null) =>
+      getState.mockReturnValue({
+        setExternalMutation,
+        openFiles: [{ ...runtimeTab, externalMutation: mutation ?? undefined }]
+      })
+    )
+    callRuntimeRpc.mockImplementation(stat)
+
+    await catchUpEditorTabsAfterRewatch({ ...target, runtimeEnvironmentId: 'env-1' })
+
+    expect(callRuntimeRpc).toHaveBeenCalledWith(
+      { kind: 'environment', environmentId: 'env-1' },
+      'files.stat',
+      expect.objectContaining({ relativePath: 'rt.ts' }),
+      expect.anything()
+    )
+    expect(probePresence).not.toHaveBeenCalled()
+    if (cleared) {
+      expect(setExternalMutation).toHaveBeenCalledWith('rt.ts', null)
+      expect(notified()).toEqual(['rt.ts'])
+    } else {
+      expect(setExternalMutation).not.toHaveBeenCalled()
+      expect(notify).not.toHaveBeenCalled()
+    }
   })
 
   it('probes at most three tabs at a time', async () => {

@@ -8,6 +8,8 @@ import {
 } from '@/components/editor/editor-autosave'
 import { probeEditorTabFilePresence } from '@/components/editor/editor-restored-tab-conflict-scan'
 import { mapWithConcurrency } from '../../../shared/map-with-concurrency'
+import { getRuntimeTargetForFileOwner } from '@/lib/file-owner-runtime-target'
+import { runtimePathExists } from '@/runtime/runtime-file-metadata-client'
 import {
   ORCA_WORKTREE_FILE_CHANGE_EVENT,
   type WorktreeFileChangeEventDetail
@@ -47,32 +49,79 @@ function notifyIfAllMatchesClean(notification: EditorPathMutationTarget): void {
   }
 }
 
+async function probeTabFilePresence(
+  target: EditorExternalWatchTarget,
+  file: OpenFile
+): Promise<'present' | 'missing' | 'unknown'> {
+  const state = useAppStore.getState()
+  const owner = getRuntimeTargetForFileOwner(state, file.worktreeId, file.runtimeEnvironmentId)
+  if (owner?.kind !== 'environment') {
+    return probeEditorTabFilePresence(state, file)
+  }
+  // Why: runtime-owned files are stat'ed on their host; only a transport failure stays unknown.
+  try {
+    const exists = await runtimePathExists(
+      { target: owner, worktreeId: file.worktreeId, worktreePath: target.worktreePath },
+      file.filePath
+    )
+    return exists ? 'present' : 'missing'
+  } catch {
+    return 'unknown'
+  }
+}
+
+/** Runs `probe` and reports whether the tab stayed open throughout, so a close-and-reopen under the same id is caught. */
+async function probeWithinTabLifetime<T>(
+  fileId: string,
+  probe: () => Promise<T>
+): Promise<{ result: T; sameLifetime: boolean }> {
+  let sameLifetime = true
+  const stop = useAppStore.subscribe((state) => {
+    if (!state.openFiles.some((f) => f.id === fileId)) {
+      sameLifetime = false
+    }
+  })
+  try {
+    return { result: await probe(), sameLifetime }
+  } finally {
+    stop()
+  }
+}
+
 async function catchUpTab(target: EditorExternalWatchTarget, file: OpenFile): Promise<void> {
   // Why: a tombstone only moves on proof; a plain clean tab reloads unless a stat proves it gone.
-  const presence =
+  const { result: presence, sameLifetime } =
     file.mode === 'edit' || isTombstoned(file)
-      ? await probeEditorTabFilePresence(useAppStore.getState(), file)
-      : 'unknown'
+      ? await probeWithinTabLifetime(file.id, () => probeTabFilePresence(target, file))
+      : { result: 'unknown' as const, sameLifetime: true }
   const state = useAppStore.getState()
-  // Why: the same id can be closed and reopened during the probe; a verdict for the old tab must not land on the new one.
-  if (state.openFiles.find((f) => f.id === file.id) !== file) {
+  // Why: benign updates (a late baseline stamp) replace the tab object; re-resolve and re-check eligibility instead.
+  const live = state.openFiles.find((f) => f.id === file.id)
+  if (
+    !sameLifetime ||
+    !live ||
+    live.isDirty ||
+    live.externalMutation === 'changed' ||
+    live.filePath !== file.filePath ||
+    getOpenFileRuntimeOwner(live) !== getOpenFileRuntimeOwner(file)
+  ) {
     return
   }
-  if (isTombstoned(file)) {
+  if (isTombstoned(live)) {
     if (presence !== 'present') {
       return
     }
     // Why: recreated while unwatched — mirror the watcher's create handling, then reload.
-    state.setExternalMutation(file.id, null)
+    state.setExternalMutation(live.id, null)
   } else if (presence === 'missing') {
     // Why: deleted/renamed while unwatched; mark it like a live delete event would instead of a failed reload.
-    state.setExternalMutation(file.id, 'deleted')
+    state.setExternalMutation(live.id, 'deleted')
     return
   }
   notifyIfAllMatchesClean({
     worktreeId: target.worktreeId,
     worktreePath: target.worktreePath,
-    relativePath: file.relativePath,
+    relativePath: live.relativePath,
     runtimeEnvironmentId: target.runtimeEnvironmentId,
     ...getLocalWindowsWslAliasOption(target)
   })

@@ -1,0 +1,211 @@
+// @vitest-environment happy-dom
+
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { act, createElement } from 'react'
+import { createRoot, type Root } from 'react-dom/client'
+
+type TestWatchTarget = {
+  worktreeId: string
+  worktreePath: string
+  connectionId: string | undefined
+  runtimeEnvironmentId: string | null
+}
+
+const harness = vi.hoisted(() => {
+  const targets: TestWatchTarget[] = []
+  const unwatched: TestWatchTarget[] = []
+  return {
+    keyOf: (target: TestWatchTarget): string =>
+      `${target.worktreeId}::${target.runtimeEnvironmentId ?? 'client'}`,
+    targets,
+    unwatched,
+    catchUp: vi.fn(),
+    hasBaselined: vi.fn(() => false),
+    runtimeUnsubscribe: vi.fn()
+  }
+})
+
+vi.mock('@/store', () => ({
+  useAppStore: (selector: (state: unknown) => unknown) => selector({})
+}))
+vi.mock('./editor-external-watch-targets', () => ({
+  selectEditorExternalWatchTargets: () => ({
+    targets: [...harness.targets],
+    targetsKey: harness.targets.map(harness.keyOf).join('|'),
+    unwatchedTargetKeys: new Set(harness.unwatched.map(harness.keyOf)),
+    unwatchedTargetsKey: harness.unwatched.map(harness.keyOf).join('|')
+  }),
+  getEditorExternalWatchTargetKey: harness.keyOf
+}))
+vi.mock('./editor-runtime-file-watch', () => ({
+  subscribeEditorRuntimeFileWatch: () => harness.runtimeUnsubscribe
+}))
+vi.mock('./editor-external-watch-event-reconciliation', () => ({
+  buildEditorExternalWatchEventHandler: () => ({ handleFsChanged: vi.fn(), dispose: vi.fn() })
+}))
+vi.mock('./editor-external-watch-disk-verification', () => ({
+  verifyLatchedEditorMoveDestinations: vi.fn()
+}))
+vi.mock('./editor-external-watch-rewatch-reload', () => ({
+  catchUpEditorTabsAfterRewatch: harness.catchUp,
+  hasBaselinedEditorTabs: harness.hasBaselined
+}))
+
+import { useEditorExternalWatch } from './useEditorExternalWatch'
+
+function WatchProbe(): null {
+  useEditorExternalWatch()
+  return null
+}
+
+const active: TestWatchTarget = {
+  worktreeId: 'active',
+  worktreePath: '/active',
+  connectionId: undefined,
+  runtimeEnvironmentId: null
+}
+const background: TestWatchTarget = {
+  worktreeId: 'background',
+  worktreePath: '/background',
+  connectionId: undefined,
+  runtimeEnvironmentId: null
+}
+const runtimeBackground: TestWatchTarget = {
+  worktreeId: 'runtime-background',
+  worktreePath: '/runtime',
+  connectionId: undefined,
+  runtimeEnvironmentId: 'env-1'
+}
+
+describe('useEditorExternalWatch with background trim', () => {
+  let container: HTMLDivElement
+  let root: Root
+  let previousApi: unknown
+  let watchWorktree: ReturnType<typeof vi.fn>
+  let unwatchWorktree: ReturnType<typeof vi.fn>
+  let resolveWatch: () => void
+
+  async function render(targets: TestWatchTarget[], unwatched: TestWatchTarget[]): Promise<void> {
+    harness.targets.splice(0, harness.targets.length, ...targets)
+    harness.unwatched.splice(0, harness.unwatched.length, ...unwatched)
+    await act(async () => root.render(createElement(WatchProbe)))
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    harness.hasBaselined.mockReturnValue(false)
+    watchWorktree = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveWatch = resolve
+        })
+    )
+    unwatchWorktree = vi.fn().mockResolvedValue(undefined)
+    previousApi = (window as unknown as { api?: unknown }).api
+    ;(window as unknown as { api: unknown }).api = {
+      fs: { watchWorktree, unwatchWorktree, onFsChanged: vi.fn(() => vi.fn()) }
+    }
+    container = document.body.appendChild(document.createElement('div'))
+    root = createRoot(container)
+  })
+
+  afterEach(async () => {
+    await act(async () => root.unmount())
+    container.remove()
+    ;(window as unknown as { api?: unknown }).api = previousApi
+  })
+
+  it('refreshes a dropped workspace once its watch request settles', async () => {
+    await render([active], [background])
+    await render([active, background], [])
+    expect(watchWorktree).toHaveBeenLastCalledWith({
+      worktreePath: '/background',
+      connectionId: undefined
+    })
+    expect(harness.catchUp).not.toHaveBeenCalled()
+
+    await act(async () => resolveWatch())
+    expect(harness.catchUp).toHaveBeenCalledWith(background)
+    expect(harness.catchUp).toHaveBeenCalledTimes(1)
+  })
+
+  it('refreshes a dropped runtime workspace as it resubscribes', async () => {
+    await render([active], [runtimeBackground])
+    await render([active, runtimeBackground], [])
+
+    expect(harness.catchUp).toHaveBeenCalledWith(runtimeBackground)
+  })
+
+  it('does not refresh a workspace whose tabs were just opened', async () => {
+    await render([active], [])
+    await render([active, background], [])
+    await act(async () => resolveWatch())
+
+    expect(harness.catchUp).not.toHaveBeenCalled()
+  })
+
+  it('refreshes any re-added workspace whose tabs were loaded before', async () => {
+    harness.hasBaselined.mockReturnValue(true)
+    await render([active], [])
+    await render([active, background], [])
+    await act(async () => resolveWatch())
+
+    expect(harness.catchUp).toHaveBeenCalledWith(background)
+  })
+
+  it('keeps a directory watched while another workspace on it still needs it', async () => {
+    const sibling = { ...background, worktreeId: 'sibling' }
+    await render([active, background, sibling], [])
+    expect(watchWorktree).toHaveBeenCalledTimes(2)
+
+    await render([active, sibling], [background])
+    expect(unwatchWorktree).not.toHaveBeenCalled()
+
+    await render([active], [background, sibling])
+    expect(unwatchWorktree).toHaveBeenCalledTimes(1)
+    expect(unwatchWorktree).toHaveBeenCalledWith({
+      worktreePath: '/background',
+      connectionId: undefined
+    })
+  })
+
+  it('refreshes a re-watched workspace whose directory another workspace already watches', async () => {
+    const sibling = { ...background, worktreeId: 'sibling' }
+    await render([active, sibling], [background])
+    await render([active, sibling, background], [])
+
+    expect(watchWorktree).toHaveBeenCalledTimes(2)
+    await act(async () => resolveWatch())
+    expect(harness.catchUp).toHaveBeenCalledWith(background)
+  })
+
+  it('only releases when a background workspace drops out', async () => {
+    await render([active, background], [])
+    watchWorktree.mockClear()
+
+    await render([active], [background])
+    expect(unwatchWorktree).toHaveBeenCalledTimes(1)
+    expect(unwatchWorktree).toHaveBeenCalledWith({
+      worktreePath: '/background',
+      connectionId: undefined
+    })
+    expect(watchWorktree).not.toHaveBeenCalled()
+    expect(harness.catchUp).not.toHaveBeenCalled()
+  })
+
+  it('leaves no watch behind after all tabs close or the app unmounts', async () => {
+    await render([active, background, runtimeBackground], [])
+    await render([], [])
+    expect(unwatchWorktree).toHaveBeenCalledTimes(2)
+    expect(harness.runtimeUnsubscribe).toHaveBeenCalledTimes(1)
+
+    await render([active], [background])
+    await act(async () => root.unmount())
+    expect(unwatchWorktree).toHaveBeenCalledTimes(3)
+    expect(unwatchWorktree).toHaveBeenLastCalledWith({
+      worktreePath: '/active',
+      connectionId: undefined
+    })
+    root = createRoot(container)
+  })
+})

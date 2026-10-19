@@ -258,6 +258,8 @@ export function buildDefaultSettings(args: {
     experimentalNewWorktreeCardStyle: false,
     experimentalEphemeralVms: false,
     experimentalWslHosts: false,
+    // Why: kill switch for the narrowed watch set; off restores watching every workspace with an open tab.
+    trimBackgroundWorkspaceWatches: true,
     compactWorktreeCards: false,
     // Why: local desktop stays the default until the user picks a saved runtime environment.
     activeRuntimeEnvironmentId: null,

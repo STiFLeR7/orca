@@ -504,6 +504,8 @@ export type GlobalSettings = GlobalSettingsBase & {
   experimentalEphemeralVms?: boolean
   /** Experimental (Windows): add WSL distros as hosts, each running its own Orca server. */
   experimentalWslHosts?: boolean
+  /** Watch only active, recently used and unsaved-edit workspaces; off watches every workspace with an open tab. */
+  trimBackgroundWorkspaceWatches?: boolean
   /** Compact worktree cards: hide the metadata row when title and branch say the same thing. */
   compactWorktreeCards: boolean
   /** Legacy persisted key from the Experimental rollout; new writes use compactWorktreeCards. */

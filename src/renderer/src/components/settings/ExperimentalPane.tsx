@@ -274,7 +274,9 @@ export function ExperimentalPane({
         <WslHostsExperimentalSetting settings={settings} updateSettings={updateSettings} />
       ) : null}
 
-      {hiddenExperimentalUnlocked ? <HiddenExperimentalGroup /> : null}
+      {hiddenExperimentalUnlocked ? (
+        <HiddenExperimentalGroup settings={settings} updateSettings={updateSettings} />
+      ) : null}
     </div>
   )
 }

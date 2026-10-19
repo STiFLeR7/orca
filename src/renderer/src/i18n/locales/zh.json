@@ -7606,7 +7606,9 @@
         "HiddenExperimentalGroup": {
           "7c4e18d2f6": "在本机启用粗体故障捕获手势：{{samplingShortcut}} 开始采样突发；{{captureShortcut}} 将窗格证据捕获到磁盘。",
           "b09f24a51d": "终端渲染诊断",
-          "f2c81d904a": "隐藏实验设置"
+          "f2c81d904a": "隐藏实验设置",
+          "trimWatchesDescription": "仅监视当前工作区、最近使用的 3 个工作区以及有未保存编辑的工作区中的文件。关闭后会监视每个打开了编辑器标签页的工作区。",
+          "trimWatchesTitle": "仅监视最近使用和有未保存更改的工作区"
         },
         "InputPane": {
           "db15068196": "在 Linux 和 macOS 上默认启用。 Linux使用系统选择剪贴板；其他平台使用私有缓冲区。",

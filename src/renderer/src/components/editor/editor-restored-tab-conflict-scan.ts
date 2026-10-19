@@ -22,6 +22,37 @@ const VERIFY_FAST_ATTEMPTS = 30
 // Cap concurrent reads: many restored dirty tabs would otherwise fire N concurrent 15s RPCs competing with startup connection recovery.
 const MAX_CONCURRENT_VERIFY_READS = 3
 
+function getFileConnectionId(file: OpenFile): string | undefined {
+  const connectionId = getConnectionIdForFile(file.worktreeId, file.filePath) ?? undefined
+  const externalSshTargetId = file.externalSshTargetId?.trim()
+  if (externalSshTargetId && connectionId !== externalSshTargetId) {
+    throw new Error('External SSH file owner changed')
+  }
+  return connectionId
+}
+
+/** True only when a local/SSH stat proves the tab's file is gone; runtime-owned files would stat the client path. */
+export async function probeEditorTabFileMissing(state: AppState, file: OpenFile): Promise<boolean> {
+  const owner = getRuntimeTargetForFileOwner(state, file.worktreeId, file.runtimeEnvironmentId)
+  // Why `!owner`: with no single owner, a client stat cannot prove the file gone.
+  if (owner?.kind !== 'local') {
+    return false
+  }
+  try {
+    const connectionId = getFileConnectionId(file)
+    const access = connectionId ? undefined : editorTabFileAccess(state, file)
+    const exists = await globalThis.window?.api?.fs?.pathExists?.({
+      filePath: file.filePath,
+      connectionId,
+      ...(access ? { access } : {})
+    })
+    return exists === false
+  } catch {
+    // Why: a failed probe can't disprove existence.
+    return false
+  }
+}
+
 export function attachRestoredTabConflictScan(store: AppStoreApi): () => void {
   // Dedupes queued + in-flight verifications; the store's pending flag is the durable "needs verification" signal.
   const inFlightFileIds = new Set<string>()
@@ -31,41 +62,6 @@ export function attachRestoredTabConflictScan(store: AppStoreApi): () => void {
   const verifyQueue: string[] = []
   let activeVerifyReads = 0
   let disposed = false
-
-  const getFileConnectionId = (file: OpenFile): string | undefined => {
-    const connectionId = getConnectionIdForFile(file.worktreeId, file.filePath) ?? undefined
-    const externalSshTargetId = file.externalSshTargetId?.trim()
-    if (externalSshTargetId && connectionId !== externalSshTargetId) {
-      throw new Error('External SSH file owner changed')
-    }
-    return connectionId
-  }
-
-  // Only local/SSH paths can be probed: for runtime-owned files window.api.fs would stat the client path and misreport it as gone.
-  const probeFileMissing = async (file: OpenFile): Promise<boolean> => {
-    const owner = getRuntimeTargetForFileOwner(
-      store.getState(),
-      file.worktreeId,
-      file.runtimeEnvironmentId
-    )
-    // Why `!owner`: with no single owner, a client stat cannot prove the file gone.
-    if (owner?.kind !== 'local') {
-      return false
-    }
-    try {
-      const connectionId = getFileConnectionId(file)
-      const access = connectionId ? undefined : editorTabFileAccess(store.getState(), file)
-      const exists = await globalThis.window?.api?.fs?.pathExists?.({
-        filePath: file.filePath,
-        connectionId,
-        ...(access ? { access } : {})
-      })
-      return exists === false
-    } catch {
-      // Why: a failed probe can't disprove existence — keep retrying.
-      return false
-    }
-  }
 
   const verify = async (file: OpenFile): Promise<void> => {
     // ids are file paths: a stray leftover marker would skip a reopened same-path tab, so only a scheduled retry keeps it set.
@@ -109,7 +105,7 @@ export function attachRestoredTabConflictScan(store: AppStoreApi): () => void {
       if (disposed) {
         return
       }
-      if (await probeFileMissing(file)) {
+      if (await probeEditorTabFileMissing(store.getState(), file)) {
         if (disposed) {
           return
         }

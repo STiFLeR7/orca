@@ -7616,7 +7616,9 @@
         "HiddenExperimentalGroup": {
           "7c4e18d2f6": "Activa los gestos de captura del fallo de negrita en esta máquina: {{samplingShortcut}} inicia una ráfaga de muestreo; {{captureShortcut}} captura evidencia del panel en disco.",
           "b09f24a51d": "Diagnósticos de renderizado del terminal",
-          "f2c81d904a": "Configuración experimental oculta"
+          "f2c81d904a": "Configuración experimental oculta",
+          "trimWatchesDescription": "Vigila archivos solo en el espacio de trabajo activo, los 3 usados más recientemente y los que tienen cambios sin guardar. Desactivado vigila todos los espacios de trabajo con una pestaña de editor abierta.",
+          "trimWatchesTitle": "Vigilar solo espacios de trabajo recientes y sin guardar"
         },
         "InputPane": {
           "db15068196": "Habilitado de forma predeterminada en Linux y macOS. Linux usa el portapapeles de selección del sistema; otras plataformas utilizan un búfer privado.",

@@ -7902,7 +7902,9 @@
         "HiddenExperimentalGroup": {
           "7c4e18d2f6": "Arms the bold-glitch capture gestures on this machine: {{samplingShortcut}} starts a sampling burst; {{captureShortcut}} captures pane evidence to disk.",
           "b09f24a51d": "Terminal render diagnostics",
-          "f2c81d904a": "Hidden experimental settings"
+          "f2c81d904a": "Hidden experimental settings",
+          "trimWatchesDescription": "Watches files only in the active workspace, the 3 most recently used ones, and any with unsaved edits. Off watches every workspace with an open editor tab.",
+          "trimWatchesTitle": "Watch only recent and unsaved workspaces"
         },
         "InputPane": {
           "db15068196": "Enabled by default on Linux and macOS. Linux uses the system selection clipboard; other platforms use a private buffer.",

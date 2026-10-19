@@ -3,6 +3,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { HiddenExperimentalGroup } from './HiddenExperimentalGroup'
+import { getDefaultSettings } from '../../../../shared/constants'
 
 const isArmed = vi.fn()
 const setArmed = vi.fn()
@@ -21,19 +22,29 @@ describe('HiddenExperimentalGroup', () => {
     vi.unstubAllGlobals()
   })
 
+  const updateSettings = vi.fn()
+  function renderGroup(trimBackgroundWorkspaceWatches = true): void {
+    render(
+      <HiddenExperimentalGroup
+        settings={{ ...getDefaultSettings('/tmp'), trimBackgroundWorkspaceWatches }}
+        updateSettings={updateSettings}
+      />
+    )
+  }
+
   function renderDiagnosticsSwitch(): HTMLElement {
     return screen.getByRole('switch', { name: 'Terminal render diagnostics' })
   }
 
   it('initializes the render-diagnostics switch from the armed state', () => {
     isArmed.mockReturnValue(true)
-    render(<HiddenExperimentalGroup />)
+    renderGroup()
 
     expect(renderDiagnosticsSwitch().getAttribute('data-state')).toBe('checked')
   })
 
   it('arms and disarms the capture sentinel through the switch', () => {
-    render(<HiddenExperimentalGroup />)
+    renderGroup()
     expect(renderDiagnosticsSwitch().getAttribute('data-state')).toBe('unchecked')
 
     fireEvent.click(renderDiagnosticsSwitch())
@@ -50,9 +61,20 @@ describe('HiddenExperimentalGroup', () => {
     ['Windows', 'Ctrl+click', 'Shift+Ctrl+click']
   ])('renders the platform-native capture chords on %s', (userAgent, sampling, capture) => {
     vi.stubGlobal('navigator', { userAgent })
-    render(<HiddenExperimentalGroup />)
+    renderGroup()
 
     expect(screen.getByText(new RegExp(sampling.replace('+', '\\+')))).toBeTruthy()
     expect(screen.getByText(new RegExp(capture.replaceAll('+', '\\+')))).toBeTruthy()
+  })
+
+  it.each([true, false])('flips the background watch trim from %s', (enabled) => {
+    renderGroup(enabled)
+    const trimSwitch = screen.getByRole('switch', {
+      name: 'Watch only recent and unsaved workspaces'
+    })
+    expect(trimSwitch.getAttribute('data-state')).toBe(enabled ? 'checked' : 'unchecked')
+
+    fireEvent.click(trimSwitch)
+    expect(updateSettings).toHaveBeenCalledWith({ trimBackgroundWorkspaceWatches: !enabled })
   })
 })

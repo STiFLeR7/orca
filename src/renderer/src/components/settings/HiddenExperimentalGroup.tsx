@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { Label } from '../ui/label'
 import { Switch } from '../ui/switch'
 import {
@@ -12,7 +13,14 @@ import { getShortcutPlatform } from '@/lib/shortcut-platform'
 // orange treatment (header tint, label colors) is the shared visual signal
 // for hidden-experimental items so future entries inherit the same
 // affordance without another round of styling decisions.
-export function HiddenExperimentalGroup(): React.JSX.Element {
+export function HiddenExperimentalGroup({
+  settings,
+  updateSettings
+}: {
+  settings: GlobalSettings
+  updateSettings: (updates: Partial<GlobalSettings>) => void
+}): React.JSX.Element {
+  const trimWatches = settings.trimBackgroundWorkspaceWatches === true
   const isMac = getShortcutPlatform() === 'darwin'
   const [renderDiagnosticsArmed, setRenderDiagnosticsArmed] = useState(
     isTerminalRenderDesyncSentinelArmed
@@ -57,6 +65,33 @@ export function HiddenExperimentalGroup(): React.JSX.Element {
           checked={renderDiagnosticsArmed}
           className="border-orange-500/40 data-[state=unchecked]:bg-orange-500/20"
           onCheckedChange={onRenderDiagnosticsChange}
+          thumbClassName="data-[state=unchecked]:bg-orange-200 dark:data-[state=unchecked]:bg-orange-100"
+        />
+      </div>
+
+      <div className="flex items-start justify-between gap-4 rounded-md border border-orange-500/30 bg-orange-500/10 px-3 py-2.5">
+        <div className="min-w-0 shrink space-y-0.5">
+          <Label className="text-orange-600 dark:text-orange-300">
+            {translate(
+              'auto.components.settings.HiddenExperimentalGroup.trimWatchesTitle',
+              'Watch only recent and unsaved workspaces'
+            )}
+          </Label>
+          <p className="text-xs text-orange-600/80 dark:text-orange-300/80">
+            {translate(
+              'auto.components.settings.HiddenExperimentalGroup.trimWatchesDescription',
+              'Watches files only in the active workspace, the 3 most recently used ones, and any with unsaved edits. Off watches every workspace with an open editor tab.'
+            )}
+          </p>
+        </div>
+        <Switch
+          aria-label={translate(
+            'auto.components.settings.HiddenExperimentalGroup.trimWatchesTitle',
+            'Watch only recent and unsaved workspaces'
+          )}
+          checked={trimWatches}
+          className="border-orange-500/40 data-[state=unchecked]:bg-orange-500/20"
+          onCheckedChange={(checked) => updateSettings({ trimBackgroundWorkspaceWatches: checked })}
           thumbClassName="data-[state=unchecked]:bg-orange-200 dark:data-[state=unchecked]:bg-orange-100"
         />
       </div>

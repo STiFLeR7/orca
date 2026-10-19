@@ -12451,7 +12451,9 @@
         "HiddenExperimentalGroup": {
           "7c4e18d2f6": "Arme les gestes de capture audacieux sur cette machine : {{samplingShortcut}} démarre une rafale d'échantillonnage ; {{captureShortcut}} capture les preuves du volet sur le disque.",
           "b09f24a51d": "Diagnostic de rendu du terminal",
-          "f2c81d904a": "Paramètres expérimentaux cachés"
+          "f2c81d904a": "Paramètres expérimentaux cachés",
+          "trimWatchesDescription": "Surveille les fichiers uniquement dans l’espace de travail actif, les 3 plus récemment utilisés et ceux qui ont des modifications non enregistrées. Désactivé, surveille chaque espace de travail ayant un onglet d’éditeur ouvert.",
+          "trimWatchesTitle": "Surveiller uniquement les espaces de travail récents et non enregistrés"
         },
         "RepositoryGitHubAccountSection": {
           "unsupported": "La CLI GitHub de ce runtime est trop ancienne pour la liaison de compte (nécessite gh ≥ 2,40).",

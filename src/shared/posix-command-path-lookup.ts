@@ -100,14 +100,11 @@ export function buildPosixCommandPathLookupScript(
 
 function buildCommandAssignment(target: PosixCommandPathLookupTarget): string {
   if (target.kind === 'literal') {
-    return shellQuote(target.value)
+    return quotePosixShell(target.value)
   }
   if (!SHELL_VARIABLE_NAME_PATTERN.test(target.name)) {
     throw new Error(`Invalid shell variable name: ${target.name}`)
   }
   return `\${${target.name}-}`
 }
-
-function shellQuote(value: string): string {
-  return `'${value.replace(/'/g, "'\\''")}'`
-}
+import { quotePosixShell } from './shell-argument-quoting'

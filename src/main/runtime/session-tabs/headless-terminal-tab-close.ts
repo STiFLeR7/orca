@@ -10,6 +10,7 @@ import type {
 } from '../../../shared/runtime-types'
 import { parseAppSshPtyId } from '../../../shared/ssh-pty-id'
 import { buildHeadlessMobileSessionTabGroups } from '../mobile-session-layout-projection'
+import { paneTitlesForDesktopWindow } from './desktop-pane-title-forwarding'
 import { appendRetiredTerminalSurfaceProofs } from '../../../shared/terminal-retirement-proof-ledger'
 import type { RuntimePtyWorktreeRecord } from '../runtime-terminal-state-records'
 import type { TerminalPaneLayoutNode } from '../../../shared/terminal-tab-types'
@@ -230,18 +231,28 @@ export abstract class OrcaRuntimeWithCloseHeadlessMobileTerminalTab extends Orca
     const explicitWorktreeId = this.getExplicitSessionWorktreeIdSelector(worktreeSelector)
     const worktreeId =
       explicitWorktreeId ?? (await this.resolveWorktreeSelector(worktreeSelector)).id
-    // Why: when a renderer is authoritative (desktop host reached via shared
-    // control), it owns pane geometry and republishes it — a headless write here
-    // would be overwritten and could fight the renderer. Persist only headlessly.
-    if (this.getAvailableAuthoritativeWindow()) {
-      return { updated: true }
-    }
     // Why: resolve to the host tab id (older/raw-id clients) so the persisted
     // layout entry matches, matching setMobileSessionTabProps.
     const snapshot = this.mobileSessionTabsByWorktree.get(worktreeId)
     const hostTabId = snapshot
       ? (this.resolveMobileSessionHostTabId(snapshot, args.tabId) ?? args.tabId)
       : args.tabId
+    // Why: when a renderer is authoritative (desktop host reached via shared
+    // control), it owns pane geometry and republishes it — a headless write here
+    // would be overwritten and could fight the renderer. Only pane names, which
+    // the window takes one pane at a time, are passed on to it.
+    if (this.getAvailableAuthoritativeWindow()) {
+      if (args.titlesByLeafId && this.notifier?.setPaneTitle) {
+        const tab = this.getWorkspaceSessionForWorktree(worktreeId)?.tabsByWorktree[
+          worktreeId
+        ]?.find((candidate) => candidate.id === hostTabId)
+        const { titlesByLeafId, root } = args
+        for (const { leafId, title } of paneTitlesForDesktopWindow({ root, titlesByLeafId, tab })) {
+          this.notifier.setPaneTitle(hostTabId, leafId, title)
+        }
+      }
+      return { updated: true }
+    }
     const resolvedArgs = { ...args, tabId: hostTabId }
     const acceptedLayout = this.persistHeadlessTerminalPaneLayout(worktreeId, resolvedArgs)
     if (acceptedLayout) {

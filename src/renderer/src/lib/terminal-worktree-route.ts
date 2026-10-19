@@ -3,7 +3,7 @@ import { isEphemeralSetupTerminalWorktreeId } from '../../../shared/ephemeral-se
 import { parseExecutionHostId } from '../../../shared/execution-host'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
 import type { AppState } from '@/store/types'
-import { getRuntimeEnvironmentIdForWorktree } from './worktree-runtime-owner'
+import { resolveOwnerWithLegacyFallback } from './worktree-runtime-owner'
 import { runtimeEnvironmentIdUnlessTwin } from './resolve-owner'
 import type { WorktreeRuntimeOwnerState } from './worktree-runtime-owner-state'
 import { resolveWorktreeOperationRouteResult } from './worktree-operation-route'
@@ -60,11 +60,18 @@ export function resolveTerminalHostOwnership(
     worktreeId === FLOATING_TERMINAL_WORKTREE_ID ||
     parseWorkspaceKey(worktreeId)?.type === 'folder'
   ) {
+    const owner = resolveOwnerWithLegacyFallback(state, { workspaceId: worktreeId })
+    if (owner.kind !== 'resolved') {
+      // Why: spawn must not pick a twin; a twin's runtime PTYs carry `remote:` ids, so a raw id is
+      // local or SSH on either copy.
+      return purpose === 'spawn' ? UNRESOLVED_TERMINAL_HOST : LOCAL_OR_SSH_TERMINAL_HOST
+    }
+    const { endpoint } = owner.owner
     return resolveFloatingScopeOwnership(
       state,
       worktreeId,
       purpose,
-      getRuntimeEnvironmentIdForWorktree(state, worktreeId)
+      endpoint.kind === 'environment' ? endpoint.environmentId : null
     )
   }
   // Why: inline setup/onboarding terminals (skill installs, feature tips) have no worktree row,

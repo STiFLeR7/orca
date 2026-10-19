@@ -21,26 +21,33 @@ import {
 } from './helpers/paired-electron-client'
 import { setPaneTitleFromTerminalMenu } from './helpers/terminal-pane-title-actions'
 
-async function callEnvironment<TResult>(
-  page: Page,
-  environmentId: string,
-  method: string,
-  params: unknown
-): Promise<TResult> {
+/** Creates a terminal on the host through the client's runtime and returns its surface tab id. */
+async function createHostTerminal(page: Page, environmentId: string, worktreeId: string) {
   return page.evaluate(
-    async ({ environmentId, method, params }) => {
+    async ({ environmentId, worktreeId }) => {
       const response = await window.api.runtimeEnvironments.call({
         selector: environmentId,
-        method,
-        params
+        method: 'session.tabs.createTerminal',
+        params: {
+          worktree: `id:${worktreeId}`,
+          activate: false,
+          select: false,
+          navigation: 'caller'
+        }
       })
       if (!response.ok) {
         throw new Error(`${response.error.code}: ${response.error.message}`)
       }
-      return response.result
+      const result: unknown = response.result
+      const tab = result && typeof result === 'object' && 'tab' in result ? result.tab : undefined
+      const id = tab && typeof tab === 'object' && 'id' in tab ? tab.id : undefined
+      if (typeof id !== 'string') {
+        throw new Error('host did not return the created terminal tab')
+      }
+      return id
     },
-    { environmentId, method, params }
-  ) as Promise<TResult>
+    { environmentId, worktreeId }
+  )
 }
 
 async function showTab(page: Page, worktreeId: string, tabId: string): Promise<void> {
@@ -94,13 +101,8 @@ test('pane names travel between a desktop host and its paired client, live', asy
         { timeout: 60_000, message: 'paired client never saw the host worktree' }
       )
       .toBe(true)
-    const created = await callEnvironment<{ tab: { id: string } }>(
-      client.page,
-      client.environmentId,
-      'session.tabs.createTerminal',
-      { worktree: `id:${worktreeId}`, activate: false, select: false, navigation: 'caller' }
-    )
-    const hostTabId = created.tab.id.split(HOST_TERMINAL_SURFACE_SEPARATOR)[0]
+    const createdTabId = await createHostTerminal(client.page, client.environmentId, worktreeId)
+    const hostTabId = createdTabId.split(HOST_TERMINAL_SURFACE_SEPARATOR)[0]
     const webTabId = toWebTerminalSurfaceTabId(hostTabId)
     const hostTabTitle = () =>
       orcaPage.evaluate(

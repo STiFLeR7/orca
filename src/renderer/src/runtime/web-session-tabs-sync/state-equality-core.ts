@@ -60,6 +60,8 @@ export function agentStatusEntryEqual(
     a.lastAssistantMessage === b.lastAssistantMessage &&
     a.lastAssistantMessageIsToolOutput === b.lastAssistantMessageIsToolOutput &&
     a.interrupted === b.interrupted &&
+    a.fileActivityAt === b.fileActivityAt &&
+    a.fileActivityKind === b.fileActivityKind &&
     mainAgentStatusEqual(a.mainAgent, b.mainAgent) &&
     a.promptInteractionKey === b.promptInteractionKey &&
     a.restoredUnconfirmed === b.restoredUnconfirmed &&

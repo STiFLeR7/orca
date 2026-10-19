@@ -183,4 +183,60 @@ describe('agent file-activity stamp through the hook server', () => {
       server.stop()
     }
   })
+
+  it('keeps the classification-only tool name off stored and emitted rows', async () => {
+    const server = new AgentHookServer()
+    await server.start({ env: 'production' })
+    try {
+      const emitted: Record<string, unknown>[] = []
+      server.setListener((event) => {
+        emitted.push({ ...event })
+      })
+      await postClaudeHook(server, { hook_event_name: 'UserPromptSubmit', prompt: 'fix' })
+      await postClaudeHook(server, {
+        hook_event_name: 'PostToolUse',
+        tool_name: 'Edit',
+        tool_input: { file_path: '/repo/a.ts', old_string: 'a', new_string: 'b' },
+        tool_response: {}
+      })
+      expect(emitted.at(-1)?.payload).toMatchObject({ fileActivityKind: 'edit' })
+      for (const row of emitted) {
+        expect(row).not.toHaveProperty('hookToolName')
+      }
+      expect(server.getStatusSnapshot()[0]).not.toHaveProperty('hookToolName')
+    } finally {
+      server.stop()
+    }
+  })
+
+  it('carries the stamp across a session-identity-only row', () => {
+    const server = new AgentHookServer()
+    const listener = vi.fn()
+    server.setListener(listener)
+    const base = { paneKey: PANE, tabId: 'tab-1', worktreeId: 'wt-1', source: 'pi' }
+    server.ingestRemote(
+      {
+        ...base,
+        hookEventName: 'tool_execution_end',
+        hookToolName: 'write',
+        payload: { state: 'working', prompt: '', agentType: 'pi' }
+      },
+      null
+    )
+    const stamped = listener.mock.lastCall?.[0]?.payload.fileActivityAt
+    expect(stamped).toEqual(expect.any(Number))
+    server.ingestRemote(
+      {
+        ...base,
+        providerSession: { key: 'session_id', id: 'pi-session', transcriptPath: '/tmp/s.jsonl' },
+        providerSessionOnly: true,
+        payload: { state: 'done', prompt: '', agentType: 'pi' }
+      },
+      null
+    )
+    expect(listener.mock.lastCall?.[0]).toMatchObject({
+      providerSessionOnly: true,
+      payload: { fileActivityAt: stamped, fileActivityKind: 'edit' }
+    })
+  })
 })

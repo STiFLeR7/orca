@@ -79,6 +79,32 @@ describe('file explorer agent activity refresh', () => {
     expect(refreshTree).toHaveBeenCalledOnce()
   })
 
+  it('spaces remote rereads at least 3s apart but keeps local ones immediate', async () => {
+    renderWatch()
+    act(() => dispatchAgentFileActivityEvent('wt'))
+    await settle()
+    act(() => dispatchAgentFileActivityEvent('wt'))
+    await settle()
+    expect(refreshTree).toHaveBeenCalledTimes(2)
+    cleanup()
+    refreshTree.mockClear()
+
+    owner.current = { kind: 'ssh', connectionId: 'conn-1' }
+    renderWatch()
+    act(() => dispatchAgentFileActivityEvent('wt'))
+    await settle()
+    act(() => dispatchAgentFileActivityEvent('wt'))
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2_999)
+    })
+    expect(refreshTree).toHaveBeenCalledOnce()
+    // The paced reread lands at 3s; the tree scheduler then needs a few more turns to run it.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(100)
+    })
+    expect(refreshTree).toHaveBeenCalledTimes(2)
+  })
+
   it('defers the refresh while an inline rename is open', async () => {
     const hook = renderWatch({ parentPath: '/repo', type: 'file', depth: 0 })
     act(() => dispatchAgentFileActivityEvent('wt'))

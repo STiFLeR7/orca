@@ -8,7 +8,12 @@ import type {
 import type { InlineInput } from './file-explorer-inline-input-row'
 import { useAppStore } from '@/store'
 import { ORCA_WORKTREE_FILE_CHANGE_EVENT } from '@/hooks/worktree-file-change-event'
-import { ORCA_AGENT_FILE_ACTIVITY_EVENT } from '@/hooks/agent-file-activity-event'
+import {
+  createAgentFileActivityPacer,
+  ORCA_AGENT_FILE_ACTIVITY_EVENT
+} from '@/hooks/agent-file-activity-event'
+
+const REMOTE_AGENT_REFRESH_GAP_MS = 3000
 import { normalizeRuntimePathForComparison } from '../../../../shared/cross-platform-path'
 import {
   getFileExplorerOperationOwner,
@@ -239,14 +244,21 @@ export function useFileExplorerWatch({
       }
     }
     // Why: agent hooks name the worktree, not paths; an overflow rereads expanded dirs and keeps the inline-input/drag deferral.
+    const agentRefreshPacer = createAgentFileActivityPacer(() =>
+      handleFsChanged({
+        worktreePath: currentWorktreePath,
+        events: [{ kind: 'overflow', absolutePath: currentWorktreePath }]
+      })
+    )
     const handleAgentFileActivity = (
       event: WindowEventMap[typeof ORCA_AGENT_FILE_ACTIVITY_EVENT]
     ): void => {
       if (event.detail?.worktreeId === currentWorktreeId) {
-        handleFsChanged({
-          worktreePath: currentWorktreePath,
-          events: [{ kind: 'overflow', absolutePath: currentWorktreePath }]
-        })
+        // Why: each refresh rereads every expanded dir, which is a round trip per dir off this machine.
+        agentRefreshPacer.signal(
+          currentWorktreeId,
+          owner.kind === 'local' ? 0 : REMOTE_AGENT_REFRESH_GAP_MS
+        )
       }
     }
     window.addEventListener(ORCA_AGENT_FILE_ACTIVITY_EVENT, handleAgentFileActivity)
@@ -261,6 +273,7 @@ export function useFileExplorerWatch({
     return () => {
       disposed = true
       window.removeEventListener(ORCA_AGENT_FILE_ACTIVITY_EVENT, handleAgentFileActivity)
+      agentRefreshPacer.dispose()
       window.removeEventListener(ORCA_WORKTREE_FILE_CHANGE_EVENT, handleRuntimeChange)
       unsubscribeListener?.()
       if (activeResyncByWatchKey.get(currentWatchKey) === scheduler.requestFullRefresh) {

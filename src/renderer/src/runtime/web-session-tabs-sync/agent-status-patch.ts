@@ -60,6 +60,19 @@ function withMirroredEvidenceReceipt(
   return { ...entry, mirroredEvidenceReceivedAt: receivedAt }
 }
 
+function newerFileActivity(
+  existing: AgentStatusEntry,
+  host: AgentStatusEntry
+): Pick<AgentStatusEntry, 'fileActivityAt' | 'fileActivityKind'> {
+  const source =
+    host.fileActivityAt !== undefined && host.fileActivityAt > (existing.fileActivityAt ?? 0)
+      ? host
+      : existing
+  return source.fileActivityAt === undefined
+    ? {}
+    : { fileActivityAt: source.fileActivityAt, fileActivityKind: source.fileActivityKind }
+}
+
 export function buildMirroredAgentStatusPatch(
   state: WebSessionTabsSyncState,
   currentTerminalTabs: readonly TerminalTab[],
@@ -150,7 +163,9 @@ export function buildMirroredAgentStatusPatch(
             lastAssistantMessageIsToolOutput:
               hostIdentityPredatesCurrentTurn || entry.lastAssistantMessage === undefined
                 ? existing.lastAssistantMessageIsToolOutput
-                : entry.lastAssistantMessageIsToolOutput
+                : entry.lastAssistantMessageIsToolOutput,
+            // Why: also host-only (bytes never carry it); the newer stamp wins so it never moves back.
+            ...newerFileActivity(existing, entry)
           }
         : entry
     nextByPaneKey.set(entry.paneKey, nextEntry)

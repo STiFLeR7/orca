@@ -65,7 +65,7 @@ function foldToolName(toolName: string): string {
   return toolName.replaceAll(/[^a-z0-9]/gi, '').toLowerCase()
 }
 
-export function classifyAgentTool(
+function classifyAgentTool(
   toolName: string | undefined
 ): Exclude<AgentFileActivityKind, 'turn'> | null {
   if (!toolName) {
@@ -75,17 +75,13 @@ export function classifyAgentTool(
   return FILE_EDIT_TOOLS.has(folded) ? 'edit' : COMMAND_TOOLS.has(folded) ? 'command' : null
 }
 
-export function isFileMutatingAgentTool(toolName: string | undefined): boolean {
-  return classifyAgentTool(toolName) !== null
-}
-
 type FileActivityRow = Pick<
   ParsedAgentStatusPayload,
   'state' | 'sessionBoundary' | 'turnCompletedAt' | 'fileActivityAt' | 'fileActivityKind'
 >
 
 /** What kind of file activity this hook event is evidence of, if any. */
-export function classifyAgentFileActivityEvent(input: {
+function classifyAgentFileActivityEvent(input: {
   eventName: unknown
   /** The tool the event itself names; a cached row's tool may belong to another agent. */
   toolName: string | undefined

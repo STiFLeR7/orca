@@ -1,9 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import {
-  isFileMutatingAgentTool,
-  resolveAgentFileActivity,
-  withAgentFileActivity
-} from './agent-file-activity'
+import { resolveAgentFileActivity, withAgentFileActivity } from './agent-file-activity'
 import { normalizeHookPayload } from './agent-hook-listener'
 import {
   createHookListenerState,
@@ -18,7 +14,14 @@ import {
   type ParsedAgentStatusPayload
 } from './agent-status-types'
 
-describe('isFileMutatingAgentTool', () => {
+const finishedToolKind = (toolName: string | undefined): string | undefined =>
+  resolveAgentFileActivity(
+    { hookEventName: 'PostToolUse', hookToolName: toolName, payload: { state: 'working' } },
+    undefined,
+    1
+  ).fileActivityKind
+
+describe('tool classification', () => {
   it('matches write and shell tools across agent naming styles', () => {
     for (const name of [
       'Edit',
@@ -34,13 +37,13 @@ describe('isFileMutatingAgentTool', () => {
       'replace_file_content',
       'multi_replace_file_content'
     ]) {
-      expect(isFileMutatingAgentTool(name)).toBe(true)
+      expect(finishedToolKind(name)).toBeDefined()
     }
   })
 
   it('ignores read-only tools and missing names', () => {
     for (const name of ['Read', 'Grep', 'Glob', 'WebFetch', 'TodoWrite', 'view', undefined]) {
-      expect(isFileMutatingAgentTool(name)).toBe(false)
+      expect(finishedToolKind(name)).toBeUndefined()
     }
   })
 })

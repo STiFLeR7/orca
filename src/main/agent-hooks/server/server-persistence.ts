@@ -52,6 +52,8 @@ export abstract class AgentHookServerPersistence extends AgentHookServerHydratio
         // rejoin a row to somebody else's terminal.
         terminalHandle: _terminalHandle,
         hostTurnRevision: _hostTurnRevision,
+        // Classifies one event only; never part of a stored row.
+        hookToolName: _hookToolName,
         launchToken,
         ...persistedPayload
       } = enrichedPayload

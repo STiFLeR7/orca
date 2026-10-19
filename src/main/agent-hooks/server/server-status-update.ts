@@ -62,7 +62,8 @@ export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusA
     if (!transitioned) {
       return undefined
     }
-    const { authorityRestartId, ...payload } = { ...incoming, ...transitioned }
+    // Why strip the tool name: it only classifies this event (see resolveAgentFileActivity).
+    const { authorityRestartId, hookToolName, ...payload } = { ...incoming, ...transitioned }
     if (!this.canWriteLegacyStatusRow(payload)) {
       return undefined
     }
@@ -143,10 +144,18 @@ export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusA
     if (terminalOwnedPayload.providerSessionOnly) {
       // Why: identity-only rows survive replay but must not emit prompt telemetry or a fabricated status.
       onAccepted?.()
-      const enriched = {
-        ...this.attachStatusTiming(terminalOwnedPayload, now),
-        observation: this.stampObservation(terminalOwnedPayload, origin, now)
-      }
+      // Why carry: an identity-only row replaces the stored row but is no file-activity evidence.
+      const enriched = withAgentFileActivity(
+        {
+          ...this.attachStatusTiming(terminalOwnedPayload, now),
+          observation: this.stampObservation(terminalOwnedPayload, origin, now)
+        },
+        resolveAgentFileActivity(
+          { payload: terminalOwnedPayload.payload, isReplay: true },
+          previous?.payload,
+          now
+        )
+      )
       this.clearAssistantMessageRetry(enriched.paneKey)
       this.runtimeObservedStatusPaneKeys.delete(enriched.paneKey)
       if (!this.writeLegacyStatusRow(enriched)) {
@@ -233,7 +242,7 @@ export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusA
       // Why: the prompt stays held, but a write that finished meanwhile is still news to readers.
       const held = withAgentFileActivity(
         withHeldChildWaitMainAgent(previous, effectivePayload),
-        resolveAgentFileActivity(effectivePayload, previous.payload, now)
+        resolveAgentFileActivity({ ...effectivePayload, hookToolName }, previous.payload, now)
       )
       // Why: a child's prompt leaves the main agent running, so the held row takes its `mainAgent` and
       // must take the same event's background evidence; a main agent's own prompt blocks it, so not there.
@@ -276,7 +285,7 @@ export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusA
       runningNonAgentTask === undefined
         ? unpairedPayload
         : { ...unpairedPayload, claudeRunningNonAgentTask: runningNonAgentTask },
-      resolveAgentFileActivity(unpairedPayload, previous?.payload, now)
+      resolveAgentFileActivity({ ...unpairedPayload, hookToolName }, previous?.payload, now)
     )
     const enriched = {
       ...this.attachStatusTiming(pairedPayload, now, observedAt),

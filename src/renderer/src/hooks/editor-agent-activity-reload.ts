@@ -38,6 +38,7 @@ export function collectAgentActivityEditorReloads(
       worktreePath: target.worktreePath,
       relativePath: file.relativePath,
       runtimeEnvironmentId,
+      fileIds: [file.id],
       ...getLocalWindowsWslAliasOption(target)
     }
     // Why: consumers re-run this at dispatch, so a tab that turned dirty meanwhile is skipped, not marked.

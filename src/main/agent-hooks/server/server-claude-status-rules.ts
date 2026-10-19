@@ -31,6 +31,19 @@ export function withHeldChildWaitMainAgent(
   previous: EnrichedAgentHookEventPayload,
   next: AgentHookEventPayload
 ): EnrichedAgentHookEventPayload {
+  const held = withHeldChildWaitMainAgentFacts(previous, next)
+  // Why: the held prompt stays, but a write that finished meanwhile is still news to readers.
+  const { fileActivityAt, fileActivityKind } = next.payload
+  if (fileActivityAt === undefined || fileActivityAt === held.payload.fileActivityAt) {
+    return held
+  }
+  return { ...held, payload: { ...held.payload, fileActivityAt, fileActivityKind } }
+}
+
+function withHeldChildWaitMainAgentFacts(
+  previous: EnrichedAgentHookEventPayload,
+  next: AgentHookEventPayload
+): EnrichedAgentHookEventPayload {
   const mainAgent = next.payload.mainAgent
   if (!previous.toolAgentId || !mainAgent) {
     return previous

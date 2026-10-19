@@ -1,5 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { isFileMutatingAgentTool, withAgentFileActivity } from './agent-file-activity'
+import {
+  isFileMutatingAgentTool,
+  reconcileRelayFileActivity,
+  withAgentFileActivity
+} from './agent-file-activity'
 import { normalizeHookPayload } from './agent-hook-listener'
 import {
   createHookListenerState,
@@ -51,6 +55,29 @@ describe('fileActivityAt on the wire', () => {
         normalizeAgentStatusPayload({ state: 'working', fileActivityAt: junk })?.fileActivityAt
       ).toBeUndefined()
     }
+  })
+})
+
+describe('reconcileRelayFileActivity', () => {
+  const working = { state: 'working' as const, prompt: '' }
+
+  it('never lets another agent’s older carried stamp move the pane backwards', () => {
+    const canonical = { fileActivityAt: 200, fileActivityKind: 'edit' as const }
+    expect(
+      reconcileRelayFileActivity({ ...working, fileActivityAt: 100 }, 100, canonical)
+    ).toMatchObject(canonical)
+  })
+
+  it('moves a fresh stamp past the pane’s newest one', () => {
+    expect(
+      reconcileRelayFileActivity({ ...working, fileActivityAt: 150 }, 100, { fileActivityAt: 200 })
+        .fileActivityAt
+    ).toBe(201)
+  })
+
+  it('keeps a newer stamp as is', () => {
+    const payload = { ...working, fileActivityAt: 300 }
+    expect(reconcileRelayFileActivity(payload, 100, { fileActivityAt: 200 })).toBe(payload)
   })
 })
 
@@ -188,5 +215,37 @@ describe('hook listener file-activity stamp', () => {
     expect(
       send({ hook_event_name: 'PostToolUse', tool_name: 'apply_patch', tool_input: {} }, 'codex')
     ).toBe(now)
+  })
+
+  it('ignores a child tool finishing when the cached lead row still names a shell tool', () => {
+    send({ hook_event_name: 'UserPromptSubmit', prompt: 'fan out' })
+    const finished = send({
+      hook_event_name: 'PostToolUse',
+      tool_name: 'Bash',
+      tool_input: { command: 'ls' }
+    })
+    send({ hook_event_name: 'SubagentStart', agent_id: 'a1', agent_type: 'general-purpose' })
+    expect(
+      send({
+        hook_event_name: 'PostToolUse',
+        agent_id: 'a1',
+        agent_type: 'general-purpose',
+        tool_name: 'Read',
+        tool_input: { file_path: '/repo/a.ts' }
+      })
+    ).toBe(finished)
+  })
+
+  it('stamps a background turn once, not again on its all-clear', () => {
+    send({ hook_event_name: 'UserPromptSubmit', prompt: 'review' })
+    send({ hook_event_name: 'SubagentStart', agent_id: 'a1', agent_type: 'general-purpose' })
+    const leadEnded = send({
+      hook_event_name: 'Stop',
+      background_tasks: [
+        { id: 'a1', type: 'subagent', status: 'running', agent_type: 'general-purpose' }
+      ]
+    })
+    expect(leadEnded).toBe(now)
+    expect(send({ hook_event_name: 'SubagentStop', agent_id: 'a1' })).toBe(leadEnded)
   })
 })

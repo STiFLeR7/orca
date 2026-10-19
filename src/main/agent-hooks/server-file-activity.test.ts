@@ -67,6 +67,37 @@ describe('agent file-activity stamp through the hook server', () => {
     }
   })
 
+  it('publishes a lead write that finishes behind a child permission prompt', async () => {
+    const server = new AgentHookServer()
+    await server.start({ env: 'production' })
+    try {
+      const stamps: (number | undefined)[] = []
+      server.setListener((event) => {
+        stamps.push(event.payload.fileActivityAt)
+      })
+      await postClaudeHook(server, { hook_event_name: 'UserPromptSubmit', prompt: 'guarded' })
+      await postClaudeHook(server, {
+        hook_event_name: 'PermissionRequest',
+        agent_id: 'a-blocked',
+        agent_type: 'general-purpose',
+        tool_name: 'Bash',
+        tool_input: { command: 'false' }
+      })
+      const beforeWrite = stamps.length
+      await postClaudeHook(server, {
+        hook_event_name: 'PostToolUse',
+        tool_name: 'Write',
+        tool_input: { file_path: '/repo/a.ts', content: 'x' },
+        tool_response: {}
+      })
+      expect(server.getStatusSnapshot()[0]).toMatchObject({ state: 'waiting', toolName: 'Bash' })
+      expect(stamps.length).toBeGreaterThan(beforeWrite)
+      expect(stamps.at(-1)).toEqual(expect.any(Number))
+    } finally {
+      server.stop()
+    }
+  })
+
   it('keeps a relay-stamped value from an SSH host', async () => {
     const server = new AgentHookServer()
     await server.start({ env: 'production' })

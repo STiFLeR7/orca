@@ -25,42 +25,64 @@ export function dispatchAgentFileActivityEvent(worktreeId: string): void {
 }
 
 export type AgentFileActivityPacer = {
-  signal: (worktreeId: string) => void
+  /** `minGapMs` is the shortest spacing this activity may have from the worktree's last emit. */
+  signal: (worktreeId: string, minGapMs: number) => void
   dispose: () => void
 }
 
-/** Leading-edge emit per worktree, then at most one trailing emit per `minGapMs`. */
+type PacerSlot = {
+  lastEmitAt: number
+  pendingGapMs: number | null
+  timer: ReturnType<typeof setTimeout> | null
+  dueAt: number
+}
+
+/** Leading-edge emit per worktree; later activity waits out its own gap, coalesced into one emit. */
 export function createAgentFileActivityPacer(
-  emit: (worktreeId: string) => void,
-  minGapMs: number
+  emit: (worktreeId: string) => void
 ): AgentFileActivityPacer {
-  const windows = new Map<string, { timer: ReturnType<typeof setTimeout>; pending: boolean }>()
-  const openWindow = (worktreeId: string): void => {
-    const timer = setTimeout(() => {
-      const current = windows.get(worktreeId)
-      windows.delete(worktreeId)
-      if (current?.pending) {
-        emit(worktreeId)
-        openWindow(worktreeId)
-      }
-    }, minGapMs)
-    windows.set(worktreeId, { timer, pending: false })
+  const slots = new Map<string, PacerSlot>()
+  const fire = (worktreeId: string, slot: PacerSlot): void => {
+    if (slot.timer) {
+      clearTimeout(slot.timer)
+    }
+    slot.timer = null
+    slot.pendingGapMs = null
+    slot.lastEmitAt = Date.now()
+    emit(worktreeId)
   }
   return {
-    signal: (worktreeId) => {
-      const current = windows.get(worktreeId)
-      if (current) {
-        current.pending = true
+    signal: (worktreeId, minGapMs) => {
+      let slot = slots.get(worktreeId)
+      if (!slot) {
+        slot = { lastEmitAt: Number.NEGATIVE_INFINITY, pendingGapMs: null, timer: null, dueAt: 0 }
+        slots.set(worktreeId, slot)
+      }
+      const gapMs = Math.min(slot.pendingGapMs ?? minGapMs, minGapMs)
+      const dueAt = slot.lastEmitAt + gapMs
+      const now = Date.now()
+      if (dueAt <= now) {
+        fire(worktreeId, slot)
         return
       }
-      emit(worktreeId)
-      openWindow(worktreeId)
+      slot.pendingGapMs = gapMs
+      if (slot.timer && slot.dueAt <= dueAt) {
+        return
+      }
+      if (slot.timer) {
+        clearTimeout(slot.timer)
+      }
+      const current = slot
+      current.dueAt = dueAt
+      current.timer = setTimeout(() => fire(worktreeId, current), dueAt - now)
     },
     dispose: () => {
-      for (const { timer } of windows.values()) {
-        clearTimeout(timer)
+      for (const slot of slots.values()) {
+        if (slot.timer) {
+          clearTimeout(slot.timer)
+        }
       }
-      windows.clear()
+      slots.clear()
     }
   }
 }

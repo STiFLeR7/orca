@@ -202,7 +202,8 @@ export function buildAgentStatusLiveEntry(
     matchedRegistryLaunchConfig ??
     matchedSleepingLaunchConfig
   const mainAgent = resolveAgentStatusLiveEntryMainAgent(existing, payload, identity.agentType)
-  const fileActivityAt = payload.fileActivityAt ?? existing?.fileActivityAt
+  const fileActivity = payload.fileActivityAt !== undefined ? payload : existing
+  const fileActivityAt = fileActivity?.fileActivityAt
   const entry: AgentStatusEntry = {
     state: payload.state,
     workingMode: payload.workingMode,
@@ -259,6 +260,7 @@ export function buildAgentStatusLiveEntry(
     interrupted: payload.interrupted,
     // Why carry: writers without the host clock (OSC, old hosts) must not read as a reset then a change.
     ...(fileActivityAt !== undefined ? { fileActivityAt } : {}),
+    ...(fileActivity?.fileActivityKind ? { fileActivityKind: fileActivity.fileActivityKind } : {}),
     sessionBoundary:
       payload.sessionBoundary ??
       (existing?.state === 'done' &&

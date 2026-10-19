@@ -11,6 +11,7 @@ import {
   type CombinedDiffFileTreeMode
 } from '../resolve-changes/combined-diff-section-identity'
 import type { CombinedDiffSectionLoadRegistry } from './combined-diff-section-load-registry'
+import { ORCA_AGENT_FILE_ACTIVITY_EVENT } from '@/hooks/agent-file-activity-event'
 
 // Why: git status and on-disk writes both revalidate loaded rows; one hook owns both watches so
 // they cannot disagree about which sections are eligible.
@@ -73,7 +74,11 @@ export function useCombinedDiffSectionRevalidation({
     }
     const handler = (event: Event): void => {
       const detail = (event as CustomEvent<EditorPathMutationTarget>).detail
-      if (!detail || detail.worktreeId !== file.worktreeId) {
+      if (
+        !detail ||
+        detail.worktreeId !== file.worktreeId ||
+        (detail.fileIds && !detail.fileIds.includes(file.id))
+      ) {
         return
       }
       const hasRuntimeOwnerFilter = Object.hasOwn(detail, 'runtimeEnvironmentId')
@@ -98,12 +103,31 @@ export function useCombinedDiffSectionRevalidation({
     return () =>
       window.removeEventListener(ORCA_EDITOR_EXTERNAL_FILE_CHANGE_EVENT, handler as EventListener)
   }, [
+    file.id,
     file.runtimeEnvironmentId,
     file.worktreeId,
     requestSectionReload,
     sectionIndexByKeyRef,
     treeMode
   ])
+
+  // Why: agent activity carries no paths; loaded sections re-read (requestSectionReload skips
+  // dirty ones), which also covers snapshot views that ignore status changes.
+  useEffect(() => {
+    if (treeMode !== 'all' && treeMode !== 'uncommitted') {
+      return
+    }
+    const handler = (event: WindowEventMap[typeof ORCA_AGENT_FILE_ACTIVITY_EVENT]): void => {
+      if (event.detail?.worktreeId !== file.worktreeId) {
+        return
+      }
+      for (const index of Array.from(loadedIndicesRef.current)) {
+        requestSectionReload(index)
+      }
+    }
+    window.addEventListener(ORCA_AGENT_FILE_ACTIVITY_EVENT, handler)
+    return () => window.removeEventListener(ORCA_AGENT_FILE_ACTIVITY_EVENT, handler)
+  }, [file.worktreeId, loadedIndicesRef, requestSectionReload, treeMode])
 
   return combinedGitStatusSignature
 }

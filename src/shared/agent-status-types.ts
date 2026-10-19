@@ -51,6 +51,8 @@ export { AGENT_STATE_HISTORY_MAX, type AgentStateHistoryEntry } from './agent-st
 export const AGENT_STATUS_STATES = ['working', 'blocked', 'waiting', 'done'] as const
 export type AgentStatusState = (typeof AGENT_STATUS_STATES)[number]
 export type AgentWorkingMode = 'monitoring'
+/** What stamped `fileActivityAt`: a file-edit tool, a shell command, or a turn end. */
+export type AgentFileActivityKind = 'edit' | 'command' | 'turn'
 
 // Why: agent types aren't a fixed set (custom agents exist); any non-empty string is
 // accepted — the well-known names are the recognized TerminalAgent ids plus the 'unknown'
@@ -140,6 +142,7 @@ export type AgentStatusEntry = {
   interrupted?: boolean
   /** See AgentStatusPayload. Carried across rows that omit it, so only a change is new evidence. */
   fileActivityAt?: number
+  fileActivityKind?: AgentFileActivityKind
   /** True when this `done` is a session boundary, not a completed turn. See AgentStatusPayload. */
   sessionBoundary?: boolean
   /** Orchestration dispatch context for panes spawned by another agent.
@@ -200,6 +203,8 @@ export type AgentStatusPayload = {
    *  by the hook listener and carried forward on every later row. A change means "files may have
    *  changed in this worktree". Absent from old hosts. */
   fileActivityAt?: number
+  /** What produced `fileActivityAt`; readers pace shell-only activity more slowly. */
+  fileActivityKind?: AgentFileActivityKind
   /** Live in-process children of the reporting session. See AgentStatusEntry. */
   subagents?: AgentSubagentSnapshot[]
   /** The main agent's own state and last-turn verdict. See AgentMainAgentStatus. Producers publish it
@@ -245,6 +250,7 @@ export function pickParsedAgentStatusPayload(
     ...(row.sessionBoundary !== undefined ? { sessionBoundary: row.sessionBoundary } : {}),
     ...(row.turnCompletedAt !== undefined ? { turnCompletedAt: row.turnCompletedAt } : {}),
     ...(row.fileActivityAt !== undefined ? { fileActivityAt: row.fileActivityAt } : {}),
+    ...(row.fileActivityKind !== undefined ? { fileActivityKind: row.fileActivityKind } : {}),
     ...(row.subagents !== undefined ? { subagents: row.subagents } : {}),
     ...(row.mainAgent !== undefined ? { mainAgent: row.mainAgent } : {}),
     ...(row.claudeTaskWakeupPending !== undefined
@@ -360,7 +366,14 @@ function normalizeAgentStatusObject(parsed: unknown): ParsedAgentStatusPayload |
     ...(typeof obj.fileActivityAt === 'number' &&
     Number.isFinite(obj.fileActivityAt) &&
     obj.fileActivityAt > 0
-      ? { fileActivityAt: obj.fileActivityAt }
+      ? {
+          fileActivityAt: obj.fileActivityAt,
+          ...(obj.fileActivityKind === 'edit' ||
+          obj.fileActivityKind === 'command' ||
+          obj.fileActivityKind === 'turn'
+            ? { fileActivityKind: obj.fileActivityKind }
+            : {})
+        }
       : {}),
     subagents: normalizeAgentSubagentsField(obj.subagents),
     mainAgent: normalizeMainAgentStatusField(obj.mainAgent),

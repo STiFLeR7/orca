@@ -36,7 +36,7 @@ function invalidateCombinedDiffCachesForRelativePath(relativePath: string): void
 
 function handleCombinedDiffExternalFileChange(event: Event): void {
   const detail = (event as CustomEvent<EditorPathMutationTarget>).detail
-  if (detail?.relativePath) {
+  if (detail?.relativePath && !detail.fileIds) {
     // Why: inactive combined-diff tabs are unmounted, so only a module-level cache bust stops a remount replaying stale bodies.
     invalidateCombinedDiffCachesForRelativePath(detail.relativePath)
   }

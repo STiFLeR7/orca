@@ -13,12 +13,12 @@ describe('createAgentFileActivityPacer', () => {
 
   it('emits immediately, then coalesces a burst into one trailing emit', () => {
     const emit = vi.fn()
-    const pacer = createAgentFileActivityPacer(emit, 1000)
+    const pacer = createAgentFileActivityPacer(emit)
 
-    pacer.signal('wt-1')
+    pacer.signal('wt-1', 1000)
     expect(emit).toHaveBeenCalledTimes(1)
-    pacer.signal('wt-1')
-    pacer.signal('wt-1')
+    pacer.signal('wt-1', 1000)
+    pacer.signal('wt-1', 1000)
     expect(emit).toHaveBeenCalledTimes(1)
 
     vi.advanceTimersByTime(1000)
@@ -26,23 +26,42 @@ describe('createAgentFileActivityPacer', () => {
     vi.advanceTimersByTime(1000)
     expect(emit).toHaveBeenCalledTimes(2)
 
-    pacer.signal('wt-1')
+    pacer.signal('wt-1', 1000)
+    expect(emit).toHaveBeenCalledTimes(3)
+  })
+
+  it('holds shell-only activity to its longer gap but lets an edit through sooner', () => {
+    const emit = vi.fn()
+    const pacer = createAgentFileActivityPacer(emit)
+    pacer.signal('wt-1', 3000)
+    pacer.signal('wt-1', 3000)
+    vi.advanceTimersByTime(2000)
+    expect(emit).toHaveBeenCalledTimes(1)
+    vi.advanceTimersByTime(1000)
+    expect(emit).toHaveBeenCalledTimes(2)
+
+    pacer.signal('wt-1', 3000)
+    vi.advanceTimersByTime(500)
+    pacer.signal('wt-1', 1000)
+    vi.advanceTimersByTime(499)
+    expect(emit).toHaveBeenCalledTimes(2)
+    vi.advanceTimersByTime(1)
     expect(emit).toHaveBeenCalledTimes(3)
   })
 
   it('paces each worktree independently', () => {
     const emit = vi.fn()
-    const pacer = createAgentFileActivityPacer(emit, 1000)
-    pacer.signal('wt-1')
-    pacer.signal('wt-2')
+    const pacer = createAgentFileActivityPacer(emit)
+    pacer.signal('wt-1', 1000)
+    pacer.signal('wt-2', 1000)
     expect(emit.mock.calls).toEqual([['wt-1'], ['wt-2']])
   })
 
   it('drops pending trailing emits on dispose', () => {
     const emit = vi.fn()
-    const pacer = createAgentFileActivityPacer(emit, 1000)
-    pacer.signal('wt-1')
-    pacer.signal('wt-1')
+    const pacer = createAgentFileActivityPacer(emit)
+    pacer.signal('wt-1', 1000)
+    pacer.signal('wt-1', 1000)
     pacer.dispose()
     vi.advanceTimersByTime(5000)
     expect(emit).toHaveBeenCalledTimes(1)
@@ -73,7 +92,7 @@ describe('createAgentFileActivityObserver', () => {
       },
       { agentStatusByPaneKey: { [PANE]: row({ fileActivityAt: 10 }) } }
     )
-    expect(signal).toHaveBeenCalledExactlyOnceWith('wt-1')
+    expect(signal).toHaveBeenCalledExactlyOnceWith('wt-1', 1000)
   })
 
   it('ignores re-sent rows that keep the same stamp, whatever their tool name', () => {
@@ -110,7 +129,7 @@ describe('createAgentFileActivityObserver', () => {
       },
       { agentStatusByPaneKey: { [PANE]: row({ toolName: 'Read' }) } }
     )
-    expect(signal).toHaveBeenCalledExactlyOnceWith('wt-1')
+    expect(signal).toHaveBeenCalledExactlyOnceWith('wt-1', 1000)
   })
 
   it('skips panes first seen with a stamp', () => {
@@ -138,6 +157,41 @@ describe('createAgentFileActivityObserver', () => {
     visible = true
     observer.flushHidden()
     observer.flushHidden()
-    expect(signal).toHaveBeenCalledExactlyOnceWith('wt-1')
+    expect(signal).toHaveBeenCalledExactlyOnceWith('wt-1', 1000)
+  })
+
+  it('paces shell-only activity at the slower gap', () => {
+    const signal = vi.fn()
+    createAgentFileActivityObserver({ signal }, () => true).observe(
+      {
+        agentStatusByPaneKey: {
+          [PANE]: row({ updatedAt: 2, fileActivityAt: 20, fileActivityKind: 'command' })
+        },
+        tabsByWorktree
+      },
+      { agentStatusByPaneKey: { [PANE]: row({}) } }
+    )
+    expect(signal).toHaveBeenCalledExactlyOnceWith('wt-1', 3000)
+  })
+
+  it('does not read a mirrored row that drops the stamp, then restores it, as new activity', () => {
+    const signal = vi.fn()
+    const observer = createAgentFileActivityObserver({ signal }, () => true)
+    const stamped = { [PANE]: row({ updatedAt: 2, fileActivityAt: 20 }) }
+    const unstamped = { [PANE]: row({ updatedAt: 3 }) }
+    const restamped = { [PANE]: row({ updatedAt: 4, fileActivityAt: 20 }) }
+    observer.observe(
+      { agentStatusByPaneKey: stamped, tabsByWorktree },
+      { agentStatusByPaneKey: { [PANE]: row({}) } }
+    )
+    observer.observe(
+      { agentStatusByPaneKey: unstamped, tabsByWorktree },
+      { agentStatusByPaneKey: stamped }
+    )
+    observer.observe(
+      { agentStatusByPaneKey: restamped, tabsByWorktree },
+      { agentStatusByPaneKey: unstamped }
+    )
+    expect(signal).toHaveBeenCalledTimes(1)
   })
 })

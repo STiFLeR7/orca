@@ -26,6 +26,9 @@ export type EditorPathMutationTarget = {
   indexedOpenFiles?: {
     matches: (openFiles: OpenFile[]) => OpenFile[]
   }
+  /** Set on speculative re-reads (agent activity, no path evidence): only these tabs may react,
+   *  so path-wide consumers such as combined diffs must skip the event. */
+  fileIds?: readonly string[]
 }
 
 export type EditorSaveQuiesceTarget = { fileId: string } | EditorPathMutationTarget

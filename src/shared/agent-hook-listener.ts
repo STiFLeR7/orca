@@ -316,6 +316,7 @@ export function normalizeHookPayload(
     grokPromptBoundary: grokActiveTurn ? true : undefined,
     compactTrigger,
     toolUseId: readFirstString(hookPayloadRecord, ['tool_use_id', 'toolUseId']),
+    hookToolName: readFirstString(hookPayloadRecord, ['tool_name', 'toolName', 'tool', 'name']),
     toolAgentId: readFirstString(hookPayloadRecord, ['agent_id', 'agentId']),
     teammateName:
       source === 'claude' && eventName === 'TeammateIdle'

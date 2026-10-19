@@ -1,6 +1,5 @@
 import type { AgentFileActivityKind, ParsedAgentStatusPayload } from './agent-status-types'
 import { normalizeHookEventName } from './agent-hook-listener/provider-event-names'
-import { readFirstString } from './agent-hook-listener/interactive-tool'
 
 // Hook tool names that write files, compared lowercased with non-alphanumerics stripped
 // (Edit, write_file, WriteFile and fs_write all fold the same way).
@@ -113,74 +112,70 @@ export function classifyAgentFileActivityEvent(input: {
     : null
 }
 
-/** Stamps the pane's file-activity clock, carrying the previous value forward on rows without new evidence. */
-export function withAgentFileActivity(
-  payload: ParsedAgentStatusPayload,
-  input: {
-    eventName: unknown
-    hookToolName: string | undefined
-    previous: FileActivityRow | undefined
-    now: number
-  }
-): ParsedAgentStatusPayload {
-  const kind = classifyAgentFileActivityEvent({
-    eventName: input.eventName,
-    // Why: the event's own tool wins; a child's hook may re-send the lead's cached tool name.
-    toolName: input.hookToolName ?? payload.toolName,
-    payload,
-    previous: input.previous
-  })
-  const previousAt = input.previous?.fileActivityAt
+export type AgentFileActivity = Pick<
+  ParsedAgentStatusPayload,
+  'fileActivityAt' | 'fileActivityKind'
+>
+
+/** The hook event being admitted into the pane's status row. */
+type FileActivityEvent = {
+  hookEventName?: string
+  hookToolName?: string
+  isReplay?: boolean
+  payload: FileActivityRow & Pick<ParsedAgentStatusPayload, 'toolName'>
+}
+
+/** The pane's file-activity clock after admitting `event` on top of the stored `previous` row.
+ *  Called only where the host's status store accepts a row, so every transport and every agent
+ *  sharing the pane read and advance one clock. */
+export function resolveAgentFileActivity(
+  event: FileActivityEvent,
+  previous: FileActivityRow | undefined,
+  now: number
+): AgentFileActivity {
+  const previousAt = previous?.fileActivityAt
+  const incomingAt = event.payload.fileActivityAt
+  // Why skip replays: a reconnect re-sends rows the store already counted.
+  const kind =
+    event.isReplay === true
+      ? null
+      : classifyAgentFileActivityEvent({
+          eventName: event.hookEventName,
+          // Why: the event's own tool wins; a child's hook may re-send the lead's cached tool name.
+          toolName: event.hookToolName ?? event.payload.toolName,
+          payload: event.payload,
+          previous
+        })
   if (kind) {
-    // Why max: a host clock step backwards must still read as a change to subscribers.
+    // Why max: the clock only moves forward, even across a host clock step back.
     return {
-      ...payload,
-      fileActivityAt: Math.max(input.now, (previousAt ?? 0) + 1),
+      fileActivityAt: Math.max(now, (previousAt ?? 0) + 1, incomingAt ?? 0),
       fileActivityKind: kind
     }
   }
-  const carried = payload.fileActivityAt !== undefined ? payload : input.previous
-  return carried?.fileActivityAt === undefined
-    ? payload
+  // An upstream host (a runtime server) may already have stamped the row.
+  const source =
+    incomingAt !== undefined && (previousAt === undefined || incomingAt > previousAt)
+      ? event.payload
+      : previous
+  return source?.fileActivityAt === undefined
+    ? {}
     : {
-        ...payload,
-        fileActivityAt: carried.fileActivityAt,
-        ...(carried.fileActivityKind ? { fileActivityKind: carried.fileActivityKind } : {})
+        fileActivityAt: source.fileActivityAt,
+        ...(source.fileActivityKind ? { fileActivityKind: source.fileActivityKind } : {})
       }
 }
 
-export function stampAgentFileActivity(
-  payload: ParsedAgentStatusPayload,
-  eventName: unknown,
-  hookPayload: Record<string, unknown>,
-  previous: FileActivityRow | undefined
-): ParsedAgentStatusPayload {
-  return withAgentFileActivity(payload, {
-    eventName,
-    hookToolName: readFirstString(hookPayload, ['tool_name', 'toolName', 'tool', 'name']),
-    previous,
-    now: Date.now()
-  })
-}
-
-/** A relay keeps per-agent listener state; the pane's stamp must still only move forward
- *  when agents alternate in it. `providerPreviousAt` is the provider state's prior stamp. */
-export function reconcileRelayFileActivity(
-  payload: ParsedAgentStatusPayload,
-  providerPreviousAt: number | undefined,
-  canonical: Pick<ParsedAgentStatusPayload, 'fileActivityAt' | 'fileActivityKind'> | undefined
-): ParsedAgentStatusPayload {
-  const canonicalAt = canonical?.fileActivityAt
-  const eventAt = payload.fileActivityAt
-  if (canonicalAt === undefined || (eventAt !== undefined && eventAt > canonicalAt)) {
-    return payload
+export function withAgentFileActivity<T extends { payload: ParsedAgentStatusPayload }>(
+  row: T,
+  activity: AgentFileActivity
+): T {
+  if (
+    row.payload.fileActivityAt === activity.fileActivityAt &&
+    row.payload.fileActivityKind === activity.fileActivityKind
+  ) {
+    return row
   }
-  if (eventAt !== undefined && eventAt !== providerPreviousAt) {
-    return { ...payload, fileActivityAt: canonicalAt + 1 }
-  }
-  return {
-    ...payload,
-    fileActivityAt: canonicalAt,
-    ...(canonical?.fileActivityKind ? { fileActivityKind: canonical.fileActivityKind } : {})
-  }
+  const { fileActivityAt: _at, fileActivityKind: _kind, ...rest } = row.payload
+  return { ...row, payload: { ...rest, ...activity } }
 }

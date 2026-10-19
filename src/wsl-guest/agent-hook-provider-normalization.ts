@@ -10,7 +10,6 @@ import type { AgentHookEventPayload } from '../shared/agent-hook-listener/listen
 import type { AgentHookSource } from '../shared/agent-hook-relay'
 import { cacheRelayLegacyAgentStatus } from '../shared/agent-status-legacy-relay-cache'
 import { MAX_CACHED_PANES } from './agent-hook-cached-pane-status'
-import { reconcileRelayFileActivity } from '../shared/agent-file-activity'
 
 /** Forward every provider; only the client knows about desktop-only owner completion. */
 export class RelayProviderHookNormalization {
@@ -35,15 +34,7 @@ export class RelayProviderHookNormalization {
       lastToolByPaneKey: state.lastToolByPaneKey,
       lastStatusByPaneKey: state.lastStatusByPaneKey
     }
-    const normalized = normalizeHookPayload(view, source, body, env, options)
-    const event = normalized && {
-      ...normalized,
-      payload: reconcileRelayFileActivity(
-        normalized.payload,
-        state.lastStatusByPaneKey.get(normalized.paneKey)?.payload.fileActivityAt,
-        canonical.lastStatusByPaneKey.get(normalized.paneKey)?.payload
-      )
-    }
+    const event = normalizeHookPayload(view, source, body, env, options)
     if (event) {
       const providerState = state
       cacheRelayLegacyAgentStatus(state, event, MAX_CACHED_PANES, (paneKey) =>

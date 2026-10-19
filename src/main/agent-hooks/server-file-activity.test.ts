@@ -128,4 +128,59 @@ describe('agent file-activity stamp through the hook server', () => {
       server.stop()
     }
   })
+
+  it('stamps relayed hooks in the one store, moving forward as agents alternate in a pane', async () => {
+    const server = new AgentHookServer()
+    await server.start({ env: 'production' })
+    try {
+      const stamps: (number | undefined)[] = []
+      server.setListener((event) => {
+        stamps.push(event.payload.fileActivityAt)
+      })
+      let clock = Date.now()
+      const relay = (
+        agentType: 'claude' | 'codex',
+        hookEventName: string,
+        hookToolName?: string
+      ): number | undefined => {
+        clock += 1000
+        vi.setSystemTime(clock)
+        server.ingestRemote(
+          {
+            paneKey: PANE,
+            tabId: 'tab-1',
+            worktreeId: 'wt-1',
+            env: 'remote',
+            version: '1',
+            source: agentType,
+            hookEventName,
+            ...(hookToolName ? { hookToolName } : {}),
+            payload: {
+              state: hookEventName === 'Stop' ? 'done' : 'working',
+              paneKey: PANE,
+              updatedAt: clock,
+              agentType
+            }
+          },
+          'conn-1'
+        )
+        return stamps.at(-1)
+      }
+      vi.useFakeTimers({ toFake: ['Date'] })
+      relay('claude', 'UserPromptSubmit')
+      const claudeWrite = relay('claude', 'PostToolUse', 'Edit')
+      expect(claudeWrite).toEqual(expect.any(Number))
+      const stopped = relay('claude', 'Stop')
+      relay('codex', 'UserPromptSubmit')
+      const codexWrite = relay('codex', 'PostToolUse', 'apply_patch')
+      expect(stopped).toBeGreaterThan(claudeWrite ?? 0)
+      expect(codexWrite).toBeGreaterThan(claudeWrite ?? 0)
+      expect(relay('claude', 'PreToolUse', 'Read')).toBe(codexWrite)
+      // A child's read re-sending the lead's cached shell tool is not a write.
+      expect(relay('claude', 'PostToolUse', 'Read')).toBe(codexWrite)
+    } finally {
+      vi.useRealTimers()
+      server.stop()
+    }
+  })
 })

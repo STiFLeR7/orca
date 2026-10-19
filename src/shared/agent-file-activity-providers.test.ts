@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { normalizeHookPayload } from './agent-hook-listener'
+import { resolveAgentFileActivity, withAgentFileActivity } from './agent-file-activity'
 import {
   createHookListenerState,
   type HookListenerState
@@ -24,7 +25,7 @@ describe('file-activity stamps from each agent’s real hook normalizer', () => 
     vi.useRealTimers()
   })
 
-  // Emulates the hook server: only accepted rows become the next event's previous status.
+  // Emulates the hook server's admission: stamp against the stored row, then store.
   const send = (source: AgentHookSource, payload: Record<string, unknown>): Stamp => {
     now += 1000
     vi.setSystemTime(now)
@@ -32,8 +33,10 @@ describe('file-activity stamps from each agent’s real hook normalizer', () => 
     if (!event) {
       return undefined
     }
-    upsertBoundedAgentHookStatus(state, event)
-    const { fileActivityAt, fileActivityKind } = event.payload
+    const previous = state.lastStatusByPaneKey.get(PANE_KEY)?.payload
+    const stamped = withAgentFileActivity(event, resolveAgentFileActivity(event, previous, now))
+    upsertBoundedAgentHookStatus(state, stamped)
+    const { fileActivityAt, fileActivityKind } = stamped.payload
     return { fileActivityAt, fileActivityKind }
   }
   const fresh = (kind: 'edit' | 'command' | 'turn'): Stamp => ({

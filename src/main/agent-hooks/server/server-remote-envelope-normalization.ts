@@ -1,3 +1,5 @@
+import { AGENT_STATUS_TOOL_NAME_MAX_LENGTH } from '../../../shared/agent-status-types'
+import { normalizeOptionalField } from '../../../shared/agent-status-field-normalization'
 import { normalizeAgentProviderSession } from '../../../shared/agent-session-resume'
 import {
   normalizeClaudePromptId,
@@ -26,6 +28,7 @@ export type RemoteAgentStatusEnvelope = {
   grokPromptBoundary?: unknown
   compactTrigger?: unknown
   toolUseId?: string
+  hookToolName?: unknown
   claudeSettledRequests?: unknown
   toolAgentId?: string
   teammateName?: string
@@ -52,6 +55,7 @@ export type RemoteEnvelopeFields = {
   worktreeId?: string
   promptInteractionKey?: string
   toolUseId?: string
+  hookToolName?: string
   claudeSettledRequests?: readonly ClaudeSettledRequest[]
   toolAgentId?: string
   teammateName?: string
@@ -68,6 +72,7 @@ export function normalizeRemoteEnvelopeFields(envelope: {
   worktreeId?: string
   promptInteractionKey?: string
   toolUseId?: string
+  hookToolName?: unknown
   claudeSettledRequests?: unknown
   isReplay?: boolean
   toolAgentId?: string
@@ -108,6 +113,7 @@ export function normalizeRemoteEnvelopeFields(envelope: {
       typeof envelope.toolUseId === 'string' && envelope.toolUseId.trim().length > 0
         ? envelope.toolUseId.trim()
         : undefined,
+    hookToolName: normalizeOptionalField(envelope.hookToolName, AGENT_STATUS_TOOL_NAME_MAX_LENGTH),
     // Why replay only: a live hook carries its own settlement, so the list matters only after a gap.
     claudeSettledRequests:
       source === 'claude' && envelope.isReplay === true

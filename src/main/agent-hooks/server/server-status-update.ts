@@ -1,5 +1,9 @@
 import { transitionHookPresence } from '../../../shared/agent-hook-presence-transition'
 import {
+  resolveAgentFileActivity,
+  withAgentFileActivity
+} from '../../../shared/agent-file-activity'
+import {
   reconcileRemoteCodexState,
   markCodexLeadTurnInterrupted
 } from '../../../shared/agent-hook-listener/providers/codex-state'
@@ -226,7 +230,11 @@ export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusA
     }
     const effectivePayload = latch.event
     if (previous && shouldKeepClaudePermissionVisible(previous, effectivePayload)) {
-      const held = withHeldChildWaitMainAgent(previous, effectivePayload)
+      // Why: the prompt stays held, but a write that finished meanwhile is still news to readers.
+      const held = withAgentFileActivity(
+        withHeldChildWaitMainAgent(previous, effectivePayload),
+        resolveAgentFileActivity(effectivePayload, previous.payload, now)
+      )
       // Why: a child's prompt leaves the main agent running, so the held row takes its `mainAgent` and
       // must take the same event's background evidence; a main agent's own prompt blocks it, so not there.
       if (previous.toolAgentId) {
@@ -264,10 +272,12 @@ export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusA
       ...unpairedPayload
     } = effectivePayload
     const runningNonAgentTask = pairedClaudeNonAgentWork(previous, effectivePayload)
-    const pairedPayload =
+    const pairedPayload = withAgentFileActivity(
       runningNonAgentTask === undefined
         ? unpairedPayload
-        : { ...unpairedPayload, claudeRunningNonAgentTask: runningNonAgentTask }
+        : { ...unpairedPayload, claudeRunningNonAgentTask: runningNonAgentTask },
+      resolveAgentFileActivity(unpairedPayload, previous?.payload, now)
+    )
     const enriched = {
       ...this.attachStatusTiming(pairedPayload, now, observedAt),
       observation: this.stampObservation(pairedPayload, origin, observedAt ?? now)

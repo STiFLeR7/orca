@@ -108,6 +108,8 @@ export type AgentHookRelayEnvelope = {
   compactTrigger?: 'manual' | 'auto'
   /** Claude tool execution id, when the source hook provides one. */
   toolUseId?: string
+  /** See AgentHookEventPayload.hookToolName; absent from older relays. */
+  hookToolName?: string
   /** Optional, replay only: Claude requests the relay saw end while this receiver may have been away. */
   claudeSettledRequests?: readonly ClaudeSettledRequest[]
   /** Claude subagent identity, when the source hook provides one. */

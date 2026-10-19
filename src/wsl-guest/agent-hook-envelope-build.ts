@@ -33,6 +33,7 @@ export function buildRelayHookEnvelope(
     grokPromptBoundary: event.grokPromptBoundary,
     compactTrigger: event.compactTrigger,
     toolUseId: event.toolUseId,
+    ...(event.hookToolName ? { hookToolName: event.hookToolName } : {}),
     toolAgentId: event.toolAgentId,
     teammateName: event.teammateName,
     toolAgentType: event.toolAgentType,

@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   isFileMutatingAgentTool,
-  reconcileRelayFileActivity,
+  resolveAgentFileActivity,
   withAgentFileActivity
 } from './agent-file-activity'
 import { normalizeHookPayload } from './agent-hook-listener'
@@ -58,30 +58,7 @@ describe('fileActivityAt on the wire', () => {
   })
 })
 
-describe('reconcileRelayFileActivity', () => {
-  const working = { state: 'working' as const, prompt: '' }
-
-  it('never lets another agent’s older carried stamp move the pane backwards', () => {
-    const canonical = { fileActivityAt: 200, fileActivityKind: 'edit' as const }
-    expect(
-      reconcileRelayFileActivity({ ...working, fileActivityAt: 100 }, 100, canonical)
-    ).toMatchObject(canonical)
-  })
-
-  it('moves a fresh stamp past the pane’s newest one', () => {
-    expect(
-      reconcileRelayFileActivity({ ...working, fileActivityAt: 150 }, 100, { fileActivityAt: 200 })
-        .fileActivityAt
-    ).toBe(201)
-  })
-
-  it('keeps a newer stamp as is', () => {
-    const payload = { ...working, fileActivityAt: 300 }
-    expect(reconcileRelayFileActivity(payload, 100, { fileActivityAt: 200 })).toBe(payload)
-  })
-})
-
-describe('withAgentFileActivity', () => {
+describe('resolveAgentFileActivity', () => {
   const row = (overrides: Partial<ParsedAgentStatusPayload>): ParsedAgentStatusPayload => ({
     state: 'working',
     prompt: '',
@@ -89,34 +66,57 @@ describe('withAgentFileActivity', () => {
   })
 
   it('stamps a finished write and carries the stamp on later rows', () => {
-    const stamped = withAgentFileActivity(row({ toolName: 'Edit' }), {
-      eventName: 'PostToolUse',
-      hookToolName: 'Edit',
-      previous: row({ toolName: 'Edit' }),
-      now: 50
-    })
-    expect(stamped.fileActivityAt).toBe(50)
-    const carried = withAgentFileActivity(row({ toolName: 'Read' }), {
-      eventName: 'PreToolUse',
-      hookToolName: 'Read',
-      previous: stamped,
-      now: 60
-    })
-    expect(carried.fileActivityAt).toBe(50)
+    const stamped = resolveAgentFileActivity(
+      { hookEventName: 'PostToolUse', hookToolName: 'Edit', payload: row({ toolName: 'Edit' }) },
+      row({ toolName: 'Edit' }),
+      50
+    )
+    expect(stamped).toEqual({ fileActivityAt: 50, fileActivityKind: 'edit' })
+    expect(
+      resolveAgentFileActivity(
+        { hookEventName: 'PreToolUse', hookToolName: 'Read', payload: row({ toolName: 'Read' }) },
+        row(stamped),
+        60
+      )
+    ).toEqual(stamped)
   })
 
   it('moves forward even when the host clock steps back', () => {
-    const stamped = withAgentFileActivity(row({ state: 'done' }), {
-      eventName: 'Stop',
-      hookToolName: undefined,
-      previous: row({ fileActivityAt: 100 }),
-      now: 40
-    })
-    expect(stamped.fileActivityAt).toBe(101)
+    expect(
+      resolveAgentFileActivity(
+        { hookEventName: 'Stop', payload: row({ state: 'done' }) },
+        row({ fileActivityAt: 100 }),
+        40
+      ).fileActivityAt
+    ).toBe(101)
+  })
+
+  it('does not count a replayed row again', () => {
+    expect(
+      resolveAgentFileActivity(
+        { hookEventName: 'PostToolUse', hookToolName: 'Edit', isReplay: true, payload: row({}) },
+        row({ fileActivityAt: 100 }),
+        500
+      ).fileActivityAt
+    ).toBe(100)
+  })
+
+  it('adopts a newer stamp an upstream host already set, and ignores an older one', () => {
+    const previous = row({ fileActivityAt: 100, fileActivityKind: 'edit' })
+    expect(
+      resolveAgentFileActivity(
+        { payload: row({ fileActivityAt: 200, fileActivityKind: 'command' }) },
+        previous,
+        500
+      )
+    ).toEqual({ fileActivityAt: 200, fileActivityKind: 'command' })
+    expect(
+      resolveAgentFileActivity({ payload: row({ fileActivityAt: 50 }) }, previous, 500)
+    ).toEqual({ fileActivityAt: 100, fileActivityKind: 'edit' })
   })
 })
 
-describe('hook listener file-activity stamp', () => {
+describe('file-activity stamp as the status store admits hook rows', () => {
   let state: HookListenerState
   let now = 1_700_000_000_000
 
@@ -129,7 +129,7 @@ describe('hook listener file-activity stamp', () => {
     vi.useRealTimers()
   })
 
-  // Emulates the hook server: only accepted rows become the next event's previous status.
+  // Emulates the hook server's admission: stamp against the stored row, then store.
   const send = (
     payload: Record<string, unknown>,
     source: AgentHookSource = 'claude'
@@ -137,10 +137,13 @@ describe('hook listener file-activity stamp', () => {
     now += 1000
     vi.setSystemTime(now)
     const event = normalizeHookPayload(state, source, { paneKey: PANE_KEY, payload }, 'production')
-    if (event) {
-      upsertBoundedAgentHookStatus(state, event)
+    if (!event) {
+      return undefined
     }
-    return event?.payload.fileActivityAt
+    const previous = state.lastStatusByPaneKey.get(PANE_KEY)?.payload
+    const stamped = withAgentFileActivity(event, resolveAgentFileActivity(event, previous, now))
+    upsertBoundedAgentHookStatus(state, stamped)
+    return stamped.payload.fileActivityAt
   }
 
   it('stamps only when a write tool finishes, not when it starts or awaits permission', () => {

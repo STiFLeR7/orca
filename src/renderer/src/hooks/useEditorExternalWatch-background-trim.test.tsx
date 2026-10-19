@@ -14,6 +14,7 @@ type TestWatchTarget = {
 const harness = vi.hoisted(() => {
   const targets: TestWatchTarget[] = []
   const unwatched: TestWatchTarget[] = []
+  const loadedTabs: { worktreeId: string; lastKnownDiskSignature: string }[] = []
   const runtimeReady: { current: (() => void) | undefined } = { current: undefined }
   return {
     runtimeReady,
@@ -21,14 +22,17 @@ const harness = vi.hoisted(() => {
       `${target.worktreeId}::${target.runtimeEnvironmentId ?? 'client'}`,
     targets,
     unwatched,
+    // Why: the hook resyncs through the event handler's overflow path; this records those calls.
     catchUp: vi.fn(),
-    hasBaselined: vi.fn(() => false),
+    loadedTabs,
     runtimeUnsubscribe: vi.fn()
   }
 })
 
 vi.mock('@/store', () => ({
-  useAppStore: (selector: (state: unknown) => unknown) => selector({})
+  useAppStore: Object.assign((selector: (state: unknown) => unknown) => selector({}), {
+    getState: () => ({ openFiles: harness.loadedTabs })
+  })
 }))
 vi.mock('./editor-external-watch-targets', () => ({
   selectEditorExternalWatchTargets: () => ({
@@ -37,7 +41,8 @@ vi.mock('./editor-external-watch-targets', () => ({
     unwatchedTargetKeys: new Set(harness.unwatched.map(harness.keyOf)),
     unwatchedTargetsKey: harness.unwatched.map(harness.keyOf).join('|')
   }),
-  getEditorExternalWatchTargetKey: harness.keyOf
+  getEditorExternalWatchTargetKey: harness.keyOf,
+  getOpenFileRuntimeOwner: () => null
 }))
 vi.mock('./editor-runtime-file-watch', () => ({
   subscribeEditorRuntimeFileWatch: (
@@ -51,17 +56,29 @@ vi.mock('./editor-runtime-file-watch', () => ({
   }
 }))
 vi.mock('./editor-external-watch-event-reconciliation', () => ({
-  buildEditorExternalWatchEventHandler: () => ({ handleFsChanged: vi.fn(), dispose: vi.fn() })
+  buildEditorExternalWatchEventHandler: () => ({
+    handleFsChanged: harness.catchUp,
+    dispose: vi.fn()
+  })
 }))
 vi.mock('./editor-external-watch-disk-verification', () => ({
   verifyLatchedEditorMoveDestinations: vi.fn()
 }))
-vi.mock('./editor-external-watch-rewatch-reload', () => ({
-  catchUpEditorTabsAfterRewatch: harness.catchUp,
-  hasBaselinedEditorTabs: harness.hasBaselined
-}))
 
 import { useEditorExternalWatch } from './useEditorExternalWatch'
+
+function resyncOf(target: {
+  worktreePath: string
+  runtimeEnvironmentId: string | null
+}): [unknown, string | null] {
+  return [
+    {
+      worktreePath: target.worktreePath,
+      events: [{ kind: 'overflow', absolutePath: target.worktreePath }]
+    },
+    target.runtimeEnvironmentId
+  ]
+}
 
 function WatchProbe(): null {
   useEditorExternalWatch()
@@ -103,7 +120,7 @@ describe('useEditorExternalWatch with background trim', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
-    harness.hasBaselined.mockReturnValue(false)
+    harness.loadedTabs.splice(0)
     watchWorktree = vi.fn(
       () =>
         new Promise<void>((resolve) => {
@@ -135,7 +152,7 @@ describe('useEditorExternalWatch with background trim', () => {
     expect(harness.catchUp).not.toHaveBeenCalled()
 
     await act(async () => resolveWatch())
-    expect(harness.catchUp).toHaveBeenCalledWith(background)
+    expect(harness.catchUp).toHaveBeenCalledWith(...resyncOf(background))
     expect(harness.catchUp).toHaveBeenCalledTimes(1)
   })
 
@@ -145,7 +162,7 @@ describe('useEditorExternalWatch with background trim', () => {
     expect(harness.catchUp).not.toHaveBeenCalled()
 
     await act(async () => harness.runtimeReady.current?.())
-    expect(harness.catchUp).toHaveBeenCalledWith(runtimeBackground)
+    expect(harness.catchUp).toHaveBeenCalledWith(...resyncOf(runtimeBackground))
   })
 
   it('retries a failed directory watch when another workspace on it needs it', async () => {
@@ -177,12 +194,12 @@ describe('useEditorExternalWatch with background trim', () => {
   })
 
   it('refreshes any re-added workspace whose tabs were loaded before', async () => {
-    harness.hasBaselined.mockReturnValue(true)
+    harness.loadedTabs.push({ worktreeId: 'background', lastKnownDiskSignature: 'sig' })
     await render([active], [])
     await render([active, background], [])
     await act(async () => resolveWatch())
 
-    expect(harness.catchUp).toHaveBeenCalledWith(background)
+    expect(harness.catchUp).toHaveBeenCalledWith(...resyncOf(background))
   })
 
   it('keeps a directory watched while another workspace on it still needs it', async () => {
@@ -208,7 +225,7 @@ describe('useEditorExternalWatch with background trim', () => {
 
     expect(watchWorktree).toHaveBeenCalledTimes(2)
     await act(async () => resolveWatch())
-    expect(harness.catchUp).toHaveBeenCalledWith(background)
+    expect(harness.catchUp).toHaveBeenCalledWith(...resyncOf(background))
   })
 
   it('only releases when a background workspace drops out', async () => {

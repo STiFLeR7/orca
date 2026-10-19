@@ -5,6 +5,7 @@ import { normalizeRuntimePathForComparison } from '../../../shared/cross-platfor
 import type { FsChangedPayload } from '../../../shared/filesystem-entry-types'
 import {
   getEditorExternalWatchTargetKey,
+  getOpenFileRuntimeOwner,
   selectEditorExternalWatchTargets,
   type EditorExternalWatchTarget
 } from './editor-external-watch-targets'
@@ -16,10 +17,18 @@ import {
   releaseWatchRoot,
   type HeldWatchRoots
 } from './editor-external-watch-local-roots'
-import {
-  catchUpEditorTabsAfterRewatch,
-  hasBaselinedEditorTabs
-} from './editor-external-watch-rewatch-reload'
+
+/** True when the target has tabs loaded before, so writes made while it was unwatched could be missed. */
+function hasLoadedTabs(target: EditorExternalWatchTarget): boolean {
+  return useAppStore
+    .getState()
+    .openFiles.some(
+      (file) =>
+        file.worktreeId === target.worktreeId &&
+        getOpenFileRuntimeOwner(file) === target.runtimeEnvironmentId &&
+        !!file.lastKnownDiskSignature
+    )
+}
 
 function warnExternalWatchFailure(target: EditorExternalWatchTarget, err: unknown): void {
   console.warn('[filesystem-watch] failed to watch worktree', {
@@ -58,26 +67,31 @@ export function useEditorExternalWatch(): void {
 
     // Why: acquire before release so a root shared by an added and a removed target is never dropped in between.
     for (const target of added) {
-      // Why: tabs loaded while it was unwatched (background trim) missed every write since; refresh them, best effort.
-      const catchUp =
-        previousUnwatchedKeys.has(getEditorExternalWatchTargetKey(target)) ||
-        hasBaselinedEditorTabs(target)
+      // Why: writes made while it was unwatched (background trim) were never reported. Resync like a
+      // reconnect does — one overflow through the normal pipeline — once the watch is in place.
+      const needsResync =
+        previousUnwatchedKeys.has(getEditorExternalWatchTargetKey(target)) || hasLoadedTabs(target)
+      const resync = needsResync
+        ? () =>
+            fsChangedHandlerRef.current?.(
+              {
+                worktreePath: target.worktreePath,
+                events: [{ kind: 'overflow', absolutePath: target.worktreePath }]
+              },
+              target.runtimeEnvironmentId
+            )
+        : undefined
       if (target.runtimeEnvironmentId) {
-        // Why: the host's ready event means its watcher is installed, so nothing written after the refresh read is lost.
-        subscribeRuntimeTarget(
-          target,
-          remoteWatchUnsubsRef.current,
-          fsChangedHandlerRef,
-          catchUp ? () => void catchUpEditorTabsAfterRewatch(target) : undefined
-        )
+        // Why: the host's ready event means its watcher is installed, so nothing after the resync is lost.
+        subscribeRuntimeTarget(target, remoteWatchUnsubsRef.current, fsChangedHandlerRef, resync)
         continue
       }
       const installed = acquireWatchRoot(heldWatchRootsRef.current, target, (err) => {
         // Why: SSH providers can disappear while tabs still reference the worktree; report the failure without an uncaught renderer promise.
         warnExternalWatchFailure(target, err)
       })
-      if (catchUp) {
-        void installed.then(() => catchUpEditorTabsAfterRewatch(target))
+      if (resync) {
+        void installed.then(resync)
       }
     }
     for (const target of removed) {

@@ -16,7 +16,7 @@ import {
 } from '@/components/editor/editor-autosave-controller-test-fixture'
 import { getDiskBaselineSignature } from '@/components/editor/diff-content-signature'
 import { __clearSelfWriteRegistryForTests } from '@/components/editor/editor-self-write-registry'
-import { catchUpEditorTabsAfterRewatch } from './editor-external-watch-rewatch-reload'
+import { buildEditorExternalWatchEventHandler } from './editor-external-watch-event-reconciliation'
 
 const FILE = '/repo/a.ts'
 
@@ -57,13 +57,22 @@ describe('editing a stale tab right after its workspace is watched again', () =>
       expect(file?.externalMutation).toBe('changed')
       expect(file?.isDirty).toBe(true)
 
-      // The late catch-up leaves the dirty tab and its banner alone.
-      await catchUpEditorTabsAfterRewatch({
+      // The late re-watch resync (an overflow, as on reconnect) leaves the dirty tab and its banner alone.
+      const { handleFsChanged, dispose } = buildEditorExternalWatchEventHandler(() => ({
         worktreeId: 'wt-1',
         worktreePath: '/repo',
         connectionId: undefined,
         runtimeEnvironmentId: null
+      }))
+      handleFsChanged({
+        worktreePath: '/repo',
+        events: [{ kind: 'overflow', absolutePath: '/repo' }]
       })
+      dispose()
+      await vi.advanceTimersByTimeAsync(500)
+      expect(store.getState().openFiles.find((f) => f.id === FILE)?.externalMutation).toBe(
+        'changed'
+      )
       expect(store.getState().editorDrafts[FILE]).toBe('typed on stale v1')
       expect(disk.files.get(FILE)).toBe('v2 agent write')
     } finally {

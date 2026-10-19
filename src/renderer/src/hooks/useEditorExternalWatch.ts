@@ -8,15 +8,10 @@ import {
   selectEditorExternalWatchTargets,
   type EditorExternalWatchTarget
 } from './editor-external-watch-targets'
-import {
-  buildEditorExternalWatchEventHandler,
-  collectAgentActivityEditorReloadTargets
-} from './editor-external-watch-event-reconciliation'
-import {
-  scheduleDebouncedEditorExternalReload,
-  verifyLatchedEditorMoveDestinations
-} from './editor-external-watch-disk-verification'
+import { buildEditorExternalWatchEventHandler } from './editor-external-watch-event-reconciliation'
+import { verifyLatchedEditorMoveDestinations } from './editor-external-watch-disk-verification'
 import { ORCA_AGENT_FILE_ACTIVITY_EVENT } from './agent-file-activity-event'
+import { reloadEditorsAfterAgentActivity } from './editor-agent-activity-reload'
 
 function warnExternalWatchFailure(target: EditorExternalWatchTarget, err: unknown): void {
   console.warn('[filesystem-watch] failed to watch worktree', {
@@ -130,11 +125,8 @@ export function useEditorExternalWatch(): void {
         return
       }
       for (const target of targetsRef.current) {
-        if (target.worktreeId !== worktreeId) {
-          continue
-        }
-        for (const notification of collectAgentActivityEditorReloadTargets(target)) {
-          scheduleDebouncedEditorExternalReload(notification)
+        if (target.worktreeId === worktreeId) {
+          reloadEditorsAfterAgentActivity(target)
         }
       }
     }

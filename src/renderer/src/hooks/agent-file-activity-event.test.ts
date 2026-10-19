@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentStatusEntry } from '../../../shared/agent-status-types'
 import { createAgentFileActivityPacer } from './agent-file-activity-event'
-import { observeAgentFileActivity } from './useAgentFileActivitySignal'
+import { createAgentFileActivityObserver } from './useAgentFileActivitySignal'
 
 describe('createAgentFileActivityPacer', () => {
   beforeEach(() => {
@@ -49,48 +49,95 @@ describe('createAgentFileActivityPacer', () => {
   })
 })
 
-describe('observeAgentFileActivity', () => {
+describe('createAgentFileActivityObserver', () => {
+  const PANE = 'tab-1:11111111-1111-4111-8111-111111111111'
+  const tabsByWorktree = { 'wt-1': [{ id: 'tab-1' }] }
   function row(overrides: Partial<AgentStatusEntry>): AgentStatusEntry {
     return {
       state: 'working',
       prompt: '',
       updatedAt: 1,
       stateStartedAt: 1,
-      paneKey: 'tab-1:11111111-1111-4111-8111-111111111111',
+      paneKey: PANE,
       stateHistory: [],
       ...overrides
     }
   }
 
-  it('signals the worktree that owns the agent tab', () => {
+  it('signals when the host stamps new file activity', () => {
     const signal = vi.fn()
-    observeAgentFileActivity(
+    createAgentFileActivityObserver({ signal }, () => true).observe(
       {
-        agentStatusByPaneKey: {
-          'tab-1:11111111-1111-4111-8111-111111111111': row({ updatedAt: 2 })
-        },
-        tabsByWorktree: { 'wt-1': [{ id: 'tab-1' }] }
+        agentStatusByPaneKey: { [PANE]: row({ updatedAt: 2, fileActivityAt: 20 }) },
+        tabsByWorktree
       },
-      {
-        agentStatusByPaneKey: {
-          'tab-1:11111111-1111-4111-8111-111111111111': row({ toolName: 'Write' })
-        }
-      },
-      { signal }
+      { agentStatusByPaneKey: { [PANE]: row({ fileActivityAt: 10 }) } }
     )
-    expect(signal).toHaveBeenCalledWith('wt-1')
+    expect(signal).toHaveBeenCalledExactlyOnceWith('wt-1')
   })
 
-  it('does nothing when the status map is unchanged', () => {
+  it('ignores re-sent rows that keep the same stamp, whatever their tool name', () => {
     const signal = vi.fn()
-    const agentStatusByPaneKey = {
-      'tab-1:11111111-1111-4111-8111-111111111111': row({ toolName: 'Write' })
-    }
-    observeAgentFileActivity(
-      { agentStatusByPaneKey, tabsByWorktree: {} },
-      { agentStatusByPaneKey },
-      { signal }
+    createAgentFileActivityObserver({ signal }, () => true).observe(
+      {
+        agentStatusByPaneKey: {
+          [PANE]: row({ updatedAt: 3, toolName: 'Bash', fileActivityAt: 10 })
+        },
+        tabsByWorktree
+      },
+      {
+        agentStatusByPaneKey: {
+          [PANE]: row({ updatedAt: 2, toolName: 'Bash', fileActivityAt: 10 })
+        }
+      }
     )
     expect(signal).not.toHaveBeenCalled()
+  })
+
+  it('still signals when a batch folds the write into a later waiting row', () => {
+    const signal = vi.fn()
+    createAgentFileActivityObserver({ signal }, () => true).observe(
+      {
+        agentStatusByPaneKey: {
+          [PANE]: row({
+            state: 'waiting',
+            updatedAt: 5,
+            toolName: 'AskUserQuestion',
+            fileActivityAt: 4
+          })
+        },
+        tabsByWorktree
+      },
+      { agentStatusByPaneKey: { [PANE]: row({ toolName: 'Read' }) } }
+    )
+    expect(signal).toHaveBeenCalledExactlyOnceWith('wt-1')
+  })
+
+  it('skips panes first seen with a stamp', () => {
+    const signal = vi.fn()
+    createAgentFileActivityObserver({ signal }, () => true).observe(
+      { agentStatusByPaneKey: { [PANE]: row({ fileActivityAt: 10 }) }, tabsByWorktree },
+      { agentStatusByPaneKey: {} }
+    )
+    expect(signal).not.toHaveBeenCalled()
+  })
+
+  it('holds activity while hidden and replays it once on reveal', () => {
+    const signal = vi.fn()
+    let visible = false
+    const observer = createAgentFileActivityObserver({ signal }, () => visible)
+    observer.observe(
+      {
+        agentStatusByPaneKey: { [PANE]: row({ updatedAt: 2, fileActivityAt: 20 }) },
+        tabsByWorktree
+      },
+      { agentStatusByPaneKey: { [PANE]: row({}) } }
+    )
+    observer.flushHidden()
+    expect(signal).not.toHaveBeenCalled()
+    visible = true
+    observer.flushHidden()
+    observer.flushHidden()
+    expect(signal).toHaveBeenCalledExactlyOnceWith('wt-1')
   })
 })

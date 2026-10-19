@@ -30,6 +30,7 @@ import { normalizeDshEvent } from './providers/dsh-events'
 import { normalizeZCodeEvent } from './providers/zcode-events'
 import { normalizeJcodeEvent } from './providers/jcode-events'
 import { normalizeKiroEvent } from './providers/kiro-events'
+import { stampAgentFileActivity } from '../agent-file-activity'
 
 export type ProviderDispatchResult = {
   payload: ParsedAgentStatusPayload | null
@@ -218,6 +219,11 @@ export function normalizeProviderEvent(input: {
       payload = normalizeKiroEvent(state, eventName, promptText, paneKey, hookPayload)
   }
 
+  // Why here: every provider row passes through, and the accepted previous row carries the stamp forward.
+  if (payload) {
+    const previous = state.lastStatusByPaneKey.get(paneKey)?.payload
+    payload = stampAgentFileActivity(payload, eventName, hookPayload, previous)
+  }
   return {
     payload,
     resolvedPromptText,

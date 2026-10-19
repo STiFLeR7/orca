@@ -56,6 +56,23 @@ export function registerAgentStatusToolAssistantFieldsTests(): void {
       expect(entry.lastAssistantMessageIsToolOutput).toBeUndefined()
     })
 
+    it('keeps the host file-activity stamp across rows from writers that omit it', () => {
+      vi.useFakeTimers()
+      const store = createTestStore()
+      const set = (fileActivityAt?: number): void =>
+        store.getState().setAgentStatus('tab-1:1', {
+          state: 'working',
+          prompt: 'p',
+          agentType: 'claude',
+          ...(fileActivityAt !== undefined ? { fileActivityAt } : {})
+        })
+      set(10)
+      set()
+      expect(store.getState().agentStatusByPaneKey['tab-1:1'].fileActivityAt).toBe(10)
+      set(20)
+      expect(store.getState().agentStatusByPaneKey['tab-1:1'].fileActivityAt).toBe(20)
+    })
+
     it('preserves prior agentType when payload omits it', () => {
       vi.useFakeTimers()
       const store = createTestStore()

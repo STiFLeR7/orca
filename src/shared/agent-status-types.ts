@@ -138,6 +138,8 @@ export type AgentStatusEntry = {
   /** True when this `done` was reached via interrupt, not normal completion
    *  (agent-reported or Orca's guarded fallback). Undefined otherwise. */
   interrupted?: boolean
+  /** See AgentStatusPayload. Carried across rows that omit it, so only a change is new evidence. */
+  fileActivityAt?: number
   /** True when this `done` is a session boundary, not a completed turn. See AgentStatusPayload. */
   sessionBoundary?: boolean
   /** Orchestration dispatch context for panes spawned by another agent.
@@ -194,6 +196,10 @@ export type AgentStatusPayload = {
    *  `stateStartedAt` stays pinned for that whole working run, so this is the per-turn identity.
    *  Present on the gated `working` row and that turn's later all-clear `done`. Event-only — not stored on AgentStatusEntry. */
   turnCompletedAt?: number
+  /** Execution-host clock (ms) of this pane's latest finished file-writing tool or turn end, stamped
+   *  by the hook listener and carried forward on every later row. A change means "files may have
+   *  changed in this worktree". Absent from old hosts. */
+  fileActivityAt?: number
   /** Live in-process children of the reporting session. See AgentStatusEntry. */
   subagents?: AgentSubagentSnapshot[]
   /** The main agent's own state and last-turn verdict. See AgentMainAgentStatus. Producers publish it
@@ -238,6 +244,7 @@ export function pickParsedAgentStatusPayload(
     ...(row.interrupted !== undefined ? { interrupted: row.interrupted } : {}),
     ...(row.sessionBoundary !== undefined ? { sessionBoundary: row.sessionBoundary } : {}),
     ...(row.turnCompletedAt !== undefined ? { turnCompletedAt: row.turnCompletedAt } : {}),
+    ...(row.fileActivityAt !== undefined ? { fileActivityAt: row.fileActivityAt } : {}),
     ...(row.subagents !== undefined ? { subagents: row.subagents } : {}),
     ...(row.mainAgent !== undefined ? { mainAgent: row.mainAgent } : {}),
     ...(row.claudeTaskWakeupPending !== undefined
@@ -350,6 +357,11 @@ function normalizeAgentStatusObject(parsed: unknown): ParsedAgentStatusPayload |
     interrupted: obj.interrupted === true && state === 'done' ? true : undefined,
     sessionBoundary: obj.sessionBoundary === true && state === 'done' ? true : undefined,
     turnCompletedAt: normalizeTurnCompletedAtField(obj.turnCompletedAt, state),
+    ...(typeof obj.fileActivityAt === 'number' &&
+    Number.isFinite(obj.fileActivityAt) &&
+    obj.fileActivityAt > 0
+      ? { fileActivityAt: obj.fileActivityAt }
+      : {}),
     subagents: normalizeAgentSubagentsField(obj.subagents),
     mainAgent: normalizeMainAgentStatusField(obj.mainAgent),
     ...(obj.agentType === 'claude' &&

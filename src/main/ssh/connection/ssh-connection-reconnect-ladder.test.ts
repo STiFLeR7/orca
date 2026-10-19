@@ -20,7 +20,7 @@ import {
 } from './ssh-connection-test-fixtures'
 import { SshConnection } from './ssh-connection'
 import { resolveWithSshG } from '../config/ssh-g-config-resolution'
-import { CONNECT_TIMEOUT_MS, RECONNECT_BACKOFF_MS } from '../ssh-connection-utils'
+import { CONNECT_TIMEOUT_MS, RECONNECT_BACKOFF_MS } from './ssh-connection-timing'
 import { MIN_SSH_RELAY_GRACE_PERIOD_SECONDS } from '../../../shared/ssh-types'
 
 vi.mock('ssh2', async () =>

@@ -1,5 +1,5 @@
 import type { SshConnectionManager } from './connection/ssh-connection-manager'
-import type { SshExecOptions } from './ssh-connection-utils'
+import type { SshExecOptions } from './connection/ssh-exec-options'
 import { powerShellCommand } from './ssh-remote-powershell'
 import { quotePowerShellLiteral as powerShellLiteral } from '../../shared/powershell-native-argument'
 import type { FilesystemPathFlavor } from '../../shared/filesystem-entry-types'

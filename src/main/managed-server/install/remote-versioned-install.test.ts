@@ -11,8 +11,8 @@ vi.mock('../../ssh/remote-exec/remote-exec-command', async (importOriginal) => (
   execCommand: vi.fn()
 }))
 
-vi.mock('../../ssh/ssh-connection-utils', () => ({
-  shellEscape: (s: string) => `'${s}'`
+vi.mock('../../../shared/shell-argument-quoting', () => ({
+  quotePosixShell: (s: string) => `'${s}'`
 }))
 
 import { existsSync, readFileSync } from 'node:fs'

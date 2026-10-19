@@ -54,7 +54,7 @@ import {
   recordSshSignInAwaited,
   resetSshCredentialDeclinesForTests
 } from '../ssh-credential-decline'
-import { isAuthError } from '../ssh-connection-utils'
+import { isAuthError } from '../ssh-reconnect-error-classification'
 import { recordSshUserDisconnected, resetSshUserDisconnectsForTests } from '../ssh-user-disconnect'
 
 const target = {

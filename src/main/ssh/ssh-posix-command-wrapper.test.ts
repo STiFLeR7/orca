@@ -1,7 +1,8 @@
 import { existsSync } from 'node:fs'
 import { spawnSync } from 'node:child_process'
 import { describe, expect, it } from 'vitest'
-import { shellEscape, wrapRemoteCommandForPosixShell } from './ssh-connection-utils'
+import { quotePosixShell } from '../../shared/shell-argument-quoting'
+import { wrapRemoteCommandForPosixShell } from './ssh-posix-command-wrapper'
 
 describe('wrapRemoteCommandForPosixShell', () => {
   it('emits one physical line without requiring a remote decoder binary', () => {
@@ -30,7 +31,7 @@ describe('wrapRemoteCommandForPosixShell', () => {
     'reconstructs multiline UTF-8 and shell metacharacters exactly',
     () => {
       const expected = "line one\nline 'two' \"$`\\ ! ☃\n"
-      const command = `printf '%s' ${shellEscape(expected)}`
+      const command = `printf '%s' ${quotePosixShell(expected)}`
       const result = runThroughShell('/bin/sh', command)
 
       expect(result.status).toBe(0)
@@ -51,7 +52,7 @@ describe('wrapRemoteCommandForPosixShell', () => {
     'keeps every login-shell word bounded for long metacharacter-heavy commands',
     () => {
       const expected = '$"`'.repeat(2_000)
-      const command = `printf '%s' ${shellEscape(expected)}`
+      const command = `printf '%s' ${quotePosixShell(expected)}`
       const result = runThroughShell('/bin/tcsh', command)
 
       expect(result.status).toBe(0)
@@ -76,7 +77,7 @@ describe('wrapRemoteCommandForPosixShell', () => {
       `survives the real ${shell} parser`,
       () => {
         const expected = "first\nsecond '$`\\n\\\\ ! ☃\n"
-        const command = `printf '%s' ${shellEscape(expected)}`
+        const command = `printf '%s' ${quotePosixShell(expected)}`
         const result = runThroughShell(shell, command)
         expect(result.status).toBe(0)
         expect(result.stderr).toBe('')

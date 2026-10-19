@@ -1,6 +1,6 @@
 import type { SshTarget, SshConnectionState } from '../../../shared/ssh-types'
 import { SshConnection, type SshCachedCredentials } from './ssh-connection'
-import type { SshConnectionCallbacks } from '../ssh-connection-utils'
+import type { SshConnectionCallbacks } from './ssh-connection-callbacks'
 import { recordSshConnectionOpened, recordSshConnectionReused } from './ssh-connection-attribution'
 import {
   createSshCredentialDeclinedError,

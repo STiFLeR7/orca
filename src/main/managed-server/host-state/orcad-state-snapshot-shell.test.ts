@@ -21,7 +21,7 @@ import {
 } from './orcad-state-snapshot'
 import { posixProcessGroupCommand } from './orcad-state-mutation-owner-record'
 import { getRemoteHostPlatform } from '../../ssh/ssh-remote-platform'
-import { shellEscape } from '../../ssh/ssh-connection-utils'
+import { quotePosixShell } from '../../../shared/shell-argument-quoting'
 
 const posix = getRemoteHostPlatform('linux-x64')
 
@@ -207,8 +207,8 @@ describe.skipIf(process.platform === 'win32')('snapshot commands on a real shell
   it('keeps the lock while a killed shell’s child still runs, and frees it once the group is gone', async () => {
     const lock = join(remoteBase, 'orcad-state-mutation.lock')
     const childReceipt = join(base, 'child-pid')
-    const childScript = `echo $$ > ${shellEscape(childReceipt)}; exec sleep 30`
-    const workload = `sh -c ${shellEscape(childScript)} & wait "$!"; echo DONE`
+    const childScript = `echo $$ > ${quotePosixShell(childReceipt)}; exec sleep 30`
+    const workload = `sh -c ${quotePosixShell(childScript)} & wait "$!"; echo DONE`
     const isLive = (pid: number): boolean => {
       try {
         process.kill(pid, 0)

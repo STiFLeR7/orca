@@ -22,7 +22,7 @@ import { SshConnection } from './ssh-connection'
 import { shouldUseSystemSshTransport } from '../ssh-transport-selection'
 import { resolveWithSshG } from '../config/ssh-g-config-resolution'
 import { writeFileViaSystemSsh } from '../system-transport/system-ssh-file-transfer'
-import { CONNECT_TIMEOUT_MS } from '../ssh-connection-utils'
+import { CONNECT_TIMEOUT_MS } from './ssh-connection-timing'
 import type { SshTarget } from '../../../shared/ssh-types'
 import {
   createOpenSshPrivateKeyFixture,

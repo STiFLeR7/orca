@@ -14,7 +14,7 @@ vi.mock('../../ssh/ssh-channel-multiplexer', () => mocks.sshChannelMultiplexer)
 vi.mock('../../ssh/port-forwarding/ssh-port-forward', () => mocks.sshPortForward)
 vi.mock('../ssh/ssh-port-scanner', () => mocks.sshPortScanner)
 
-import type { SshCredentialKind } from '../../ssh/ssh-connection-utils'
+import type { SshCredentialKind } from '../../ssh/connection/ssh-connection-callbacks'
 import type { SshTarget } from '../../../shared/ssh-types'
 import { isSshCredentialDeclined } from '../../ssh/ssh-credential-decline'
 import { createSshIpcHarness } from './ssh-ipc-test-harness'

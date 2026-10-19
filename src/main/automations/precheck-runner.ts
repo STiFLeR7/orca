@@ -3,7 +3,7 @@ import type { ClientChannel } from 'ssh2'
 import type { AutomationPrecheck, AutomationPrecheckResult } from '../../shared/automations-types'
 import { MAX_AUTOMATION_PRECHECK_OUTPUT_CHARS } from '../../shared/automation-precheck'
 import { getSshConnectionManager } from '../ssh/targets/ssh-target-registry'
-import { shellEscape } from '../ssh/ssh-connection-utils'
+import { quotePosixShell } from '../../shared/shell-argument-quoting'
 import { admitSelfInitiatedTreeKill } from '../own-chromium-tree-kill-guard'
 import { errorMessage } from '../../shared/error-message'
 
@@ -263,7 +263,7 @@ async function runSshPrecheck(
     return failedPrecheckResult(precheck, startedAt, 'SSH target is not connected.')
   }
   try {
-    const remoteCommand = `cd ${shellEscape(target.cwd)} && ${precheck.command}`
+    const remoteCommand = `cd ${quotePosixShell(target.cwd)} && ${precheck.command}`
     const channel = await connection.exec(remoteCommand)
     return await runSshChannelPrecheck({ precheck, channel, startedAt })
   } catch (error) {

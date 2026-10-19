@@ -8,7 +8,7 @@
  */
 import type { SshConnection } from '../connection/ssh-connection'
 import { SshChannelMultiplexer } from '../ssh-channel-multiplexer'
-import { shellEscape } from '../ssh-connection-utils'
+import { quotePosixShell } from '../../../shared/shell-argument-quoting'
 import { SHORT_RELAY_SOCKET_DIR_PREFIX } from '../relay-socket-path-limit'
 import { waitForSentinel } from './ssh-relay-sentinel'
 
@@ -41,8 +41,8 @@ export function relayBridgeConnectCommand(nodePath: string, sockPath: string): s
     return null
   }
   return (
-    `cd ${shellEscape(relayDir)} && ${shellEscape(nodePath)} relay.js --connect ` +
-    `--sock-path ${shellEscape(sockPath)} --credential-file ${shellEscape(`${sockPath}.credential`)}`
+    `cd ${quotePosixShell(relayDir)} && ${quotePosixShell(nodePath)} relay.js --connect ` +
+    `--sock-path ${quotePosixShell(sockPath)} --credential-file ${quotePosixShell(`${sockPath}.credential`)}`
   )
 }
 

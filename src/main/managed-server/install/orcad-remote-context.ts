@@ -22,7 +22,7 @@ import {
 import { orcadMachineClaimCommand } from '../host-state/orcad-machine-claim-command'
 import { execOrcadRemote, type OrcadRemoteExecTarget } from './orcad-remote-runtime-control'
 import { readRemoteHomeCommand } from '../../ssh/ssh-remote-commands'
-import { shellEscape } from '../../ssh/ssh-connection-utils'
+import { quotePosixShell } from '../../../shared/shell-argument-quoting'
 import { RELAY_REMOTE_DIR } from '../../ssh/remote-exec/remote-frame-protocol'
 import {
   isWindowsRemoteHost,
@@ -162,7 +162,7 @@ export async function resolveOrcadMachineHome(
     }
   }
   const orcadHome = orcadMachineHomeDir(host, loginHome, decision.machineKey)
-  await execOrcadRemote(remote, `umask 077; mkdir -p ${shellEscape(orcadHome)}`)
+  await execOrcadRemote(remote, `umask 077; mkdir -p ${quotePosixShell(orcadHome)}`)
   return {
     loginHome,
     orcadHome,

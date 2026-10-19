@@ -6,7 +6,7 @@
  * anything. Another desktop's relay hashes another target id, so it is never listed here.
  */
 import type { SshConnection } from '../connection/ssh-connection'
-import { shellEscape } from '../ssh-connection-utils'
+import { quotePosixShell } from '../../../shared/shell-argument-quoting'
 import { RELAY_REMOTE_DIR } from '../remote-exec/remote-frame-protocol'
 import { SHORT_RELAY_SOCKET_DIR_PREFIX } from '../relay-socket-path-limit'
 import { execCommand } from '../remote-exec/remote-exec-command'
@@ -51,9 +51,9 @@ export type LegacyRelayEndpointListing =
   | { kind: 'unverifiable' }
 
 export function legacyRelayEndpointListCommand(remoteHome: string, sockName: string): string {
-  const name = shellEscape(sockName)
+  const name = quotePosixShell(sockName)
   return [
-    `base=${shellEscape(`${remoteHome}/${RELAY_REMOTE_DIR}`)}`,
+    `base=${quotePosixShell(`${remoteHome}/${RELAY_REMOTE_DIR}`)}`,
     `short_base="${SHORT_RELAY_SOCKET_DIR_PREFIX}$(id -u 2>/dev/null)"`,
     `for sock in "$base"/relay-*/${name} "$short_base"/relay-*/${name}; do`,
     '  [ -S "$sock" ] && printf \'%s\\n\' "$sock"',
@@ -81,9 +81,9 @@ export function posixLegacyRelayConnectCommand(
   }
   const relayDir = `${remoteHome}/${RELAY_REMOTE_DIR}/${versionDir}`
   return (
-    `cd ${shellEscape(relayDir)} && ${shellEscape(nodePath)} relay.js --connect ` +
-    `--sock-path ${shellEscape(sockPath)} ` +
-    `--credential-file ${shellEscape(`${relayDir}/${sockName}.credential`)}`
+    `cd ${quotePosixShell(relayDir)} && ${quotePosixShell(nodePath)} relay.js --connect ` +
+    `--sock-path ${quotePosixShell(sockPath)} ` +
+    `--credential-file ${quotePosixShell(`${relayDir}/${sockName}.credential`)}`
   )
 }
 

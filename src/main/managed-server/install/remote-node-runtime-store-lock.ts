@@ -6,7 +6,7 @@
 import { randomUUID } from 'node:crypto'
 import { ORCAD_RUNTIMES_DIRNAME } from '../../../shared/orcad-artifacts'
 import type { RemoteInstallTransport } from './remote-install-transport'
-import { shellEscape } from '../../ssh/ssh-connection-utils'
+import { quotePosixShell } from '../../../shared/shell-argument-quoting'
 import { execHostCommand } from '../../ssh/remote-exec/remote-host-exec'
 import { isUnconfirmedSshCommandTermination } from '../../ssh/remote-exec/remote-exec-command'
 import { acquireInstallLock, INSTALL_LOCK_STALE_SECONDS } from './remote-install-lock'
@@ -50,8 +50,8 @@ function posixReleaseOwnedLockCommand(
   lock: string,
   owner: InstallLockOwnerFile
 ): string {
-  const ownerPath = shellEscape(joinRemotePath(host, lock, owner.fileName))
-  return `[ "$(cat ${ownerPath} 2>/dev/null)" = ${shellEscape(owner.token)} ] && rm -rf ${shellEscape(lock)}`
+  const ownerPath = quotePosixShell(joinRemotePath(host, lock, owner.fileName))
+  return `[ "$(cat ${ownerPath} 2>/dev/null)" = ${quotePosixShell(owner.token)} ] && rm -rf ${quotePosixShell(lock)}`
 }
 
 function heldLock(

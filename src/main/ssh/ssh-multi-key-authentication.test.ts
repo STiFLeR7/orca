@@ -22,7 +22,7 @@ vi.mock('fs', () => ({
   readFileSync: (...args: unknown[]) => mockReadFileSync(...args)
 }))
 
-import { buildConnectConfig } from './ssh-connection-utils'
+import { buildConnectConfig } from './connection/ssh-connect-config'
 import { getPassphrasePrivateKeyPath } from './ssh-private-key-authentication'
 import { buildSshArgs } from './system-transport/system-ssh-args'
 import { walkInitialAuthLadder } from './connection/ssh-connection-test-fixtures'

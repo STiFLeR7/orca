@@ -7,7 +7,7 @@ import {
 import { clientInstances, emitSshEvent, ssh2Mock } from '../__tests__/ssh-connection-test-client'
 import { createCallbacks, createTarget } from './ssh-connection-test-fixtures'
 import { SshConnection } from './ssh-connection'
-import { CONNECT_TIMEOUT_MS, RECONNECT_BACKOFF_MS } from '../ssh-connection-utils'
+import { CONNECT_TIMEOUT_MS, RECONNECT_BACKOFF_MS } from './ssh-connection-timing'
 
 vi.mock('ssh2', async () =>
   (await import('../__tests__/ssh-connection-test-client')).createSsh2Module()

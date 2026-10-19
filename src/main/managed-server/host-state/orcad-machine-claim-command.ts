@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { shellEscape } from '../../ssh/ssh-connection-utils'
+import { quotePosixShell } from '../../../shared/shell-argument-quoting'
 import { RELAY_REMOTE_DIR } from '../../ssh/remote-exec/remote-frame-protocol'
 import {
   ORCAD_MACHINE_CLAIM_FILENAME,
@@ -23,7 +23,7 @@ export function orcadMachineClaimCommand(
   machineKey: string
 ): string {
   const remoteDir = (...parts: string[]): string =>
-    shellEscape(joinRemotePath(host, loginHome, RELAY_REMOTE_DIR, ...parts))
+    quotePosixShell(joinRemotePath(host, loginHome, RELAY_REMOTE_DIR, ...parts))
   const attempt = randomUUID()
   const base = remoteDir()
   const claim = remoteDir(ORCAD_MACHINE_CLAIM_FILENAME)
@@ -35,7 +35,7 @@ export function orcadMachineClaimCommand(
   const arbiterClaim = remoteDir(ORCAD_MACHINE_CLAIM_ARBITER_DIRNAME, ORCAD_MACHINE_CLAIM_FILENAME)
   // `mv` into an existing arbiter nests the stage inside it instead of replacing it.
   const nestedStage = remoteDir(ORCAD_MACHINE_CLAIM_ARBITER_DIRNAME, stageName)
-  const body = shellEscape(
+  const body = quotePosixShell(
     JSON.stringify({
       schemaVersion: ORCAD_MACHINE_CLAIM_SCHEMA_VERSION,
       machineKey

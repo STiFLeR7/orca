@@ -23,7 +23,7 @@ import {
   posixOrcadFenceOwnedTest,
   type OrcadFence
 } from '../activation/orcad-activation-fence-scope'
-import { shellEscape } from '../../ssh/ssh-connection-utils'
+import { quotePosixShell } from '../../../shared/shell-argument-quoting'
 import {
   isWindowsRemoteHost,
   joinRemotePath,
@@ -84,12 +84,12 @@ export function serializedStateMutationCommand(
   // The holder's fence; null (a call outside any fence's run) refreshes no fence at all.
   owned: OrcadFence | null = currentOrcadFence()
 ): string {
-  const lock = shellEscape(`${baseDir}/${ORCAD_STATE_MUTATION_LOCK_DIRNAME}`)
+  const lock = quotePosixShell(`${baseDir}/${ORCAD_STATE_MUTATION_LOCK_DIRNAME}`)
   const busy = `echo ${ORCAD_STATE_MUTATION_BUSY}; exit 0;`
   const staleMinutes = Math.max(1, Math.ceil((3 * heartbeatSeconds) / 60))
   const guarded = [
     `lock=${lock};`,
-    `mkdir -p ${shellEscape(baseDir)} 2>/dev/null;`,
+    `mkdir -p ${quotePosixShell(baseDir)} 2>/dev/null;`,
     'if ! mkdir "$lock" 2>/dev/null; then',
     'holder=$(cat "$lock/pid" 2>/dev/null); group=$(cat "$lock/pgid" 2>/dev/null);',
     // No pid yet: no work began, and the pid write is exclusive, so a late writer backs off.
@@ -111,7 +111,7 @@ export function serializedStateMutationCommand(
     // Only a fence this run still owns: a superseded or foreign one ages toward takeover.
     `beat_fence() { touch -c -m "$lock" 2>/dev/null; ${
       owned
-        ? `${posixOrcadFenceOwnedTest(owned)} && touch -c -m ${shellEscape(owned.lockDir)} 2>/dev/null;`
+        ? `${posixOrcadFenceOwnedTest(owned)} && touch -c -m ${quotePosixShell(owned.lockDir)} 2>/dev/null;`
         : ':;'
     } };`,
     'beat_fence;',
@@ -119,13 +119,13 @@ export function serializedStateMutationCommand(
     `trap 'kill "$beat" 2>/dev/null; rm -rf "$lock"' EXIT;`,
     script
   ].join(' ')
-  const run = `sh -c ${shellEscape(guarded)}`
+  const run = `sh -c ${quotePosixShell(guarded)}`
   return [
     // Outermost: a superseded fence holder never takes the mutation lock or touches state.
     ...(owned ? [posixOrcadFenceGuard(owned)] : []),
     // Its own process group, so the lock can name every process the mutation started.
     'orca_state_group() { if command -v setsid >/dev/null 2>&1; then ORCA_STATE_MUTATION_GROUP=1 setsid "$@";',
-    `elif command -v perl >/dev/null 2>&1; then ORCA_STATE_MUTATION_GROUP=1 perl -e ${shellEscape('setpgrp(0, 0); exec { $ARGV[0] } @ARGV or exit 127')} "$@";`,
+    `elif command -v perl >/dev/null 2>&1; then ORCA_STATE_MUTATION_GROUP=1 perl -e ${quotePosixShell('setpgrp(0, 0); exec { $ARGV[0] } @ARGV or exit 127')} "$@";`,
     'else "$@"; fi; };',
     // Why timeout inside the group: KILL then reaches tar and rm, not only the shell.
     `if command -v timeout >/dev/null 2>&1; then orca_state_group timeout -s KILL ${ORCAD_STATE_MUTATION_DEADLINE_SECONDS} ${run}; else orca_state_group ${run}; fi;`,
@@ -166,15 +166,15 @@ export function captureOrcadStateSnapshotCommand(
   if (windows) {
     return windows
   }
-  const root = shellEscape(userDataDir)
-  const dir = shellEscape(snapshotDir)
-  const archive = shellEscape(joinRemotePath(host, snapshotDir, 'state.tar'))
+  const root = quotePosixShell(userDataDir)
+  const dir = quotePosixShell(snapshotDir)
+  const archive = quotePosixShell(joinRemotePath(host, snapshotDir, 'state.tar'))
   const memberTests = ORCAD_SNAPSHOT_MEMBERS.map(
     // Why the accumulated name is NOT quoted: `$members` is re-split by the shell before it
     // reaches tar, so a quoted name arrives as a literal `'profiles'` that tar cannot stat.
     // `assertPlainMemberName` is what makes leaving them bare safe.
     (member) => {
-      const path = `${root}/${shellEscape(member)}`
+      const path = `${root}/${quotePosixShell(member)}`
       return (
         `if [ -e ${path} ] || [ -L ${path} ]; then ` +
         `${noSymlinkedStateCommand(path)} || { echo FAILED; exit 0; }; ` +
@@ -217,7 +217,7 @@ export function probeOrcadStateSnapshotCommand(
   if (windows) {
     return windows
   }
-  const archive = shellEscape(joinRemotePath(host, snapshotDir, 'state.tar'))
+  const archive = quotePosixShell(joinRemotePath(host, snapshotDir, 'state.tar'))
   return `test -f ${archive} && echo PRESENT || echo ABSENT`
 }
 
@@ -254,16 +254,18 @@ export function restoreOrcadStateSnapshotCommand(
   if (windows) {
     return windows
   }
-  const root = shellEscape(userDataDir)
-  const archive = shellEscape(joinRemotePath(host, snapshotDir, 'state.tar'))
-  const stage = shellEscape(joinRemotePath(host, userDataDir, ORCAD_STATE_RESTORE_STAGE_DIRNAME))
+  const root = quotePosixShell(userDataDir)
+  const archive = quotePosixShell(joinRemotePath(host, snapshotDir, 'state.tar'))
+  const stage = quotePosixShell(
+    joinRemotePath(host, userDataDir, ORCAD_STATE_RESTORE_STAGE_DIRNAME)
+  )
   const removals = removeMembersCommand(root)
   const replacements = ORCAD_SNAPSHOT_MEMBERS.map((member) => {
-    const name = shellEscape(member)
+    const name = quotePosixShell(member)
     return `if [ -e ${stage}/${name} ]; then mv ${stage}/${name} ${root}/${name}; fi`
   }).join(' && ')
   const stagedMemberChecks = ORCAD_SNAPSHOT_MEMBERS.map(
-    (member) => `[ -e ${stage}/${shellEscape(member)} ]`
+    (member) => `[ -e ${stage}/${quotePosixShell(member)} ]`
   ).join(' || ')
   return serializedStateMutationCommand(
     baseDir,
@@ -291,7 +293,7 @@ export function clearOrcadStateSnapshotMembersCommand(
   if (windows) {
     return windows
   }
-  const root = shellEscape(userDataDir)
+  const root = quotePosixShell(userDataDir)
   return serializedStateMutationCommand(
     baseDir,
     `test -d ${root} || mkdir -p ${root}; if ${removeMembersCommand(root)}; then echo RESTORED; else echo FAILED; fi`
@@ -299,7 +301,7 @@ export function clearOrcadStateSnapshotMembersCommand(
 }
 
 function removeMembersCommand(root: string): string {
-  return ORCAD_SNAPSHOT_MEMBERS.map((member) => `rm -rf ${root}/${shellEscape(member)}`).join(
+  return ORCAD_SNAPSHOT_MEMBERS.map((member) => `rm -rf ${root}/${quotePosixShell(member)}`).join(
     ' && '
   )
 }
@@ -325,11 +327,11 @@ export function compareOrcadStateSnapshotCommand(
   if (windows) {
     return windows
   }
-  const root = shellEscape(userDataDir)
-  const dir = shellEscape(snapshotDir)
-  const archive = shellEscape(joinRemotePath(host, snapshotDir, 'state.tar'))
+  const root = quotePosixShell(userDataDir)
+  const dir = quotePosixShell(snapshotDir)
+  const archive = quotePosixShell(joinRemotePath(host, snapshotDir, 'state.tar'))
   const comparisons = ORCAD_SNAPSHOT_MEMBERS.map((member) => {
-    const name = shellEscape(member)
+    const name = quotePosixShell(member)
     return [
       `if [ -e ${root}/${name} ] || [ -L ${root}/${name} ]; then`,
       `${noSymlinkedStateCommand(`${root}/${name}`)} || { echo UNKNOWN; exit 0; };`,
@@ -370,8 +372,10 @@ export function newestStateMtimeCommand(
   if (windows) {
     return windows
   }
-  const root = shellEscape(userDataDir)
-  const paths = ORCAD_SNAPSHOT_MEMBERS.map((member) => `${root}/${shellEscape(member)}`).join(' ')
+  const root = quotePosixShell(userDataDir)
+  const paths = ORCAD_SNAPSHOT_MEMBERS.map((member) => `${root}/${quotePosixShell(member)}`).join(
+    ' '
+  )
   return [
     `newest=$(find ${paths} -type f -exec stat -c %Y {} + 2>/dev/null ||`,
     `find ${paths} -type f -exec stat -f %m {} + 2>/dev/null);`,

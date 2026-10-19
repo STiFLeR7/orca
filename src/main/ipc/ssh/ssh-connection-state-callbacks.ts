@@ -1,4 +1,4 @@
-import type { SshConnectionCallbacks } from '../../ssh/ssh-connection-utils'
+import type { SshConnectionCallbacks } from '../../ssh/connection/ssh-connection-callbacks'
 import type { SshConnectionState } from '../../../shared/ssh-types'
 import { isSshHostCensusInFlight } from '../../ssh/connection/ssh-connection-attribution'
 import {

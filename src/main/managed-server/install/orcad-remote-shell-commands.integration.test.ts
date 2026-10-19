@@ -37,7 +37,7 @@ import {
   parseOrcadStopOutcome,
   stopOrcadCommand
 } from './orcad-remote-process-control'
-import { shellEscape } from '../../ssh/ssh-connection-utils'
+import { quotePosixShell } from '../../../shared/shell-argument-quoting'
 import {
   orcadReadinessWaitCommand,
   parseOrcadReadinessWaitOutput
@@ -402,7 +402,7 @@ describe('liveness and stop commands, run for real', () => {
       // The prior client recognizes only orcad.js when deciding whether this PID was reused.
       const legacyIdentity = sh(
         `args=$(ps -o args= -p ${recordedPid}); ` +
-          `case "$args" in *${shellEscape(join(versionDir, 'orcad.js'))}*) echo LIVE;; *) echo DEAD;; esac`
+          `case "$args" in *${quotePosixShell(join(versionDir, 'orcad.js'))}*) echo LIVE;; *) echo DEAD;; esac`
       ).trim()
       expect(legacyIdentity).toBe('LIVE')
       expect(stopTestRuntime()).toBe('stopped')
@@ -521,7 +521,7 @@ describe('liveness and stop commands, run for real', () => {
     const matchingPs =
       'ps() { [ "$#" = 4 ] && [ "$1" = -o ] && [ "$2" = args= ] && ' +
       '[ "$3" = -p ] && [ "$4" = 4242 ] || return 1; ' +
-      `printf 'node %s\\n' ${shellEscape(join(versionDir, 'orcad.js'))}; };`
+      `printf 'node %s\\n' ${quotePosixShell(join(versionDir, 'orcad.js'))}; };`
     const deniedKill =
       'kill() { if [ "$LC_ALL" = C ]; then echo "kill: Operation not permitted" >&2; ' +
       'else echo "kill: Vorgang nicht zulässig" >&2; fi; return 1; };'
@@ -637,7 +637,7 @@ describe('host-side readiness wait, run for real', () => {
     writeFileSync(readiness(), line.slice(0, 10))
     // The writer finishes after the wait starts; the shell must pick it up mid-wait.
     sh(
-      `(sleep 1; printf '%s\\n' ${shellEscape(line.trimEnd().slice(10))} >> ${shellEscape(readiness())}) >/dev/null 2>&1 &`
+      `(sleep 1; printf '%s\\n' ${quotePosixShell(line.trimEnd().slice(10))} >> ${quotePosixShell(readiness())}) >/dev/null 2>&1 &`
     )
     expect(
       parseOrcadReadinessWaitOutput(host, sh(orcadReadinessWaitCommand(host, versionDir, 10)))

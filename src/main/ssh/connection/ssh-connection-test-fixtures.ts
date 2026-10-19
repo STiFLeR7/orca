@@ -2,7 +2,7 @@ import { EventEmitter } from 'node:events'
 import { vi } from 'vitest'
 import type { Mock } from 'vitest'
 import type { AnyAuthMethod, AuthenticationType } from 'ssh2'
-import type { SshConnectionCallbacks } from '../ssh-connection-utils'
+import type { SshConnectionCallbacks } from './ssh-connection-callbacks'
 import type { SshResolvedConfig } from '../config/ssh-g-config-resolution'
 import type { SshTarget } from '../../../shared/ssh-types'
 

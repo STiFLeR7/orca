@@ -5734,7 +5734,7 @@
       "src/main/ssh/connection/ssh-connection-store-orcad-ownership.test.ts": 293,
       "src/main/ssh/connection/ssh-connection-store.test.ts": 337,
       "src/main/ssh/connection/ssh-connection-system-transport.test.ts": 206,
-      "src/main/ssh/ssh-connection-utils.test.ts": 244,
+      "src/main/ssh/connection/ssh-connect-config.test.ts": 244,
       "src/main/ssh/connection/ssh-connection.test.ts": 1226,
       "src/main/ssh/ssh-control-socket.test.ts": 50,
       "src/main/ssh/ssh-credential-decline.test.ts": 252,

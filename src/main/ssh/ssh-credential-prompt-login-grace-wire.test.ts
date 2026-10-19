@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { Server, utils, type Connection } from 'ssh2'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { SshConnection } from './connection/ssh-connection'
-import { INITIAL_RETRY_DELAY_MS } from './ssh-connection-utils'
+import { INITIAL_RETRY_DELAY_MS } from './connection/ssh-connection-timing'
 import {
   createCallbacks,
   createResolvedConfig,

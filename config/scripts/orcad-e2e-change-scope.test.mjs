@@ -163,11 +163,21 @@ it('re-includes the real WSL distro root after excluding unit tests', () => {
 describe.each([
   [
     'hostileHosts',
-    ['src/main/ssh/connection/ssh-connection.ts', 'src/main/ssh/ssh-connection-utils.ts']
+    [
+      'src/main/ssh/connection/ssh-connection.ts',
+      'src/main/ssh/connection/ssh-connect-config.ts',
+      'src/main/ssh/ssh-posix-command-wrapper.ts',
+      'src/shared/shell-argument-quoting.ts'
+    ]
   ],
   [
     'windowsHosts',
-    ['src/main/ssh/connection/ssh-connection.ts', 'src/main/ssh/ssh-connection-utils.ts']
+    [
+      'src/main/ssh/connection/ssh-connection.ts',
+      'src/main/ssh/connection/ssh-connect-config.ts',
+      'src/main/ssh/ssh-posix-command-wrapper.ts',
+      'src/shared/shell-argument-quoting.ts'
+    ]
   ],
   ['wsl', ['src/main/orcad/orcad-wsl-host-login-environment.ts']]
 ])('%s remote transport routing', (lane, sources) => {

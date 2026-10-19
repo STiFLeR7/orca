@@ -16,7 +16,7 @@ import {
 import { SshConnection } from './ssh-connection'
 import { resolveWithSshG } from '../config/ssh-g-config-resolution'
 import { SshConnectionManager } from './ssh-connection-manager'
-import { RECONNECT_BACKOFF_MS } from '../ssh-connection-utils'
+import { RECONNECT_BACKOFF_MS } from './ssh-connection-timing'
 import { recordSshUserDisconnected, resetSshUserDisconnectsForTests } from '../ssh-user-disconnect'
 
 vi.mock('ssh2', async () =>

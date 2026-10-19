@@ -3,7 +3,7 @@ import type {
   RemoteCommandChannel,
   RemoteInstallTransport
 } from '../../managed-server/install/remote-install-transport'
-import { createSshOperationAbortError, type SshExecOptions } from '../ssh-connection-utils'
+import { createSshOperationAbortError, type SshExecOptions } from '../connection/ssh-exec-options'
 import {
   redactRelayInstallMarkerError,
   redactRelayInstallMarkerTokens

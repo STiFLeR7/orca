@@ -9,7 +9,7 @@ import {
 import type { SshTarget } from '../../../shared/ssh-types'
 import { getManagedOrcadFenceEnvironmentId } from '../../../shared/managed-orcad-ssh-owner'
 import type { SshConnection } from '../../ssh/connection/ssh-connection'
-import { isAuthError } from '../../ssh/ssh-connection-utils'
+import { isAuthError } from '../../ssh/ssh-reconnect-error-classification'
 import type { SshConnectionManager } from '../../ssh/connection/ssh-connection-manager'
 import { SshPortForwardManager } from '../../ssh/port-forwarding/ssh-port-forward'
 import { OrcadManagedTunnelTransportProvider } from './orcad-managed-tunnel-transport'

@@ -34,20 +34,22 @@ import {
   RECONNECT_BACKOFF_MS,
   CONNECT_TIMEOUT_MS,
   SSH_CREDENTIAL_TIMEOUT_MS,
+  sleep
+} from './ssh-connection-timing'
+import {
   isTransientError,
   isAuthError,
   isAgentFallbackError,
   isSystemSshFallbackError,
   isGssapiSystemSshFallbackCandidate,
   isPassphraseError,
-  sleep,
-  buildConnectConfig,
-  wrapRemoteCommandForPosixShell,
-  createSshOperationAbortError,
-  type SshExecOptions,
-  type SshConnectionCallbacks,
-  type SshCredentialKind
-} from '../ssh-connection-utils'
+  isDefiniteSystemSshHostFailure,
+  isTransientReconnectError
+} from '../ssh-reconnect-error-classification'
+import { buildConnectConfig } from './ssh-connect-config'
+import { wrapRemoteCommandForPosixShell } from '../ssh-posix-command-wrapper'
+import { createSshOperationAbortError, type SshExecOptions } from './ssh-exec-options'
+import type { SshConnectionCallbacks, SshCredentialKind } from './ssh-connection-callbacks'
 import { collectKeyboardInteractiveResponses } from '../ssh-keyboard-interactive'
 import { resolveEffectiveProxy, spawnProxyCommand } from '../ssh-proxy-command'
 import {
@@ -78,10 +80,6 @@ import {
   createCancelledConnectAttemptError,
   isCancelledConnectAttemptError
 } from '../ssh-connect-attempt-cancellation'
-import {
-  isDefiniteSystemSshHostFailure,
-  isTransientReconnectError
-} from '../ssh-reconnect-error-classification'
 import { SshReconnectLadder } from '../ssh-reconnect-ladder'
 import { mayUserSshConfigClaimAlias } from '../config/ssh-config-alias-claim'
 import {

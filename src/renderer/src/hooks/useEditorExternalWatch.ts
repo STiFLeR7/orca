@@ -63,10 +63,13 @@ export function useEditorExternalWatch(): void {
         previousUnwatchedKeys.has(getEditorExternalWatchTargetKey(target)) ||
         hasBaselinedEditorTabs(target)
       if (target.runtimeEnvironmentId) {
-        subscribeRuntimeTarget(target, remoteWatchUnsubsRef.current, fsChangedHandlerRef)
-        if (catchUp) {
-          void catchUpEditorTabsAfterRewatch(target)
-        }
+        // Why: the host's ready event means its watcher is installed, so nothing written after the refresh read is lost.
+        subscribeRuntimeTarget(
+          target,
+          remoteWatchUnsubsRef.current,
+          fsChangedHandlerRef,
+          catchUp ? () => void catchUpEditorTabsAfterRewatch(target) : undefined
+        )
         continue
       }
       const installed = acquireWatchRoot(heldWatchRootsRef.current, target, (err) => {
@@ -129,7 +132,8 @@ function subscribeRuntimeTarget(
   remoteWatchUnsubs: Map<string, () => void>,
   fsChangedHandlerRef: {
     current: ((payload: FsChangedPayload, runtimeEnvironmentId?: string | null) => void) | null
-  }
+  },
+  onFirstReady: (() => void) | undefined
 ): void {
   const runtimeEnvironmentId = target.runtimeEnvironmentId
   if (!runtimeEnvironmentId) {
@@ -141,7 +145,8 @@ function subscribeRuntimeTarget(
     subscribeEditorRuntimeFileWatch(
       { ...target, runtimeEnvironmentId },
       (payload) => fsChangedHandlerRef.current?.(payload, runtimeEnvironmentId),
-      (error) => warnExternalWatchFailure(target, error)
+      (error) => warnExternalWatchFailure(target, error),
+      onFirstReady
     )
   )
 }

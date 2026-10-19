@@ -14,7 +14,9 @@ type TestWatchTarget = {
 const harness = vi.hoisted(() => {
   const targets: TestWatchTarget[] = []
   const unwatched: TestWatchTarget[] = []
+  const runtimeReady: { current: (() => void) | undefined } = { current: undefined }
   return {
+    runtimeReady,
     keyOf: (target: TestWatchTarget): string =>
       `${target.worktreeId}::${target.runtimeEnvironmentId ?? 'client'}`,
     targets,
@@ -38,7 +40,15 @@ vi.mock('./editor-external-watch-targets', () => ({
   getEditorExternalWatchTargetKey: harness.keyOf
 }))
 vi.mock('./editor-runtime-file-watch', () => ({
-  subscribeEditorRuntimeFileWatch: () => harness.runtimeUnsubscribe
+  subscribeEditorRuntimeFileWatch: (
+    _target: unknown,
+    _onPayload: unknown,
+    _onError: unknown,
+    onFirstReady?: () => void
+  ) => {
+    harness.runtimeReady.current = onFirstReady
+    return harness.runtimeUnsubscribe
+  }
 }))
 vi.mock('./editor-external-watch-event-reconciliation', () => ({
   buildEditorExternalWatchEventHandler: () => ({ handleFsChanged: vi.fn(), dispose: vi.fn() })
@@ -129,11 +139,33 @@ describe('useEditorExternalWatch with background trim', () => {
     expect(harness.catchUp).toHaveBeenCalledTimes(1)
   })
 
-  it('refreshes a dropped runtime workspace as it resubscribes', async () => {
+  it('refreshes a dropped runtime workspace once its host reports the watch ready', async () => {
     await render([active], [runtimeBackground])
     await render([active, runtimeBackground], [])
+    expect(harness.catchUp).not.toHaveBeenCalled()
 
+    await act(async () => harness.runtimeReady.current?.())
     expect(harness.catchUp).toHaveBeenCalledWith(runtimeBackground)
+  })
+
+  it('retries a failed directory watch when another workspace on it needs it', async () => {
+    const warning = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      watchWorktree
+        .mockResolvedValueOnce(undefined)
+        .mockRejectedValueOnce(new Error('provider gone'))
+      await render([active, background], [])
+      expect(watchWorktree).toHaveBeenCalledTimes(2)
+
+      await render([active, background, { ...background, worktreeId: 'sibling' }], [])
+      expect(watchWorktree).toHaveBeenCalledTimes(3)
+      expect(watchWorktree).toHaveBeenLastCalledWith({
+        worktreePath: '/background',
+        connectionId: undefined
+      })
+    } finally {
+      warning.mockRestore()
+    }
   })
 
   it('does not refresh a workspace whose tabs were just opened', async () => {

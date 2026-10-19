@@ -7,6 +7,7 @@ type HeldWatchRoot = {
   args: WatchRootArgs
   consumers: number
   installed: Promise<void>
+  failed: boolean
 }
 
 /** Local and SSH watch roots held by this renderer, counted per physical root. */
@@ -27,12 +28,29 @@ export function acquireWatchRoot(
   const held = roots.get(key)
   if (held) {
     held.consumers += 1
+    // Why: a failed request is not a watch; the next workspace to need this root retries it.
+    if (held.failed) {
+      requestWatch(held, onError)
+    }
     return held.installed
   }
-  const args = { worktreePath: target.worktreePath, connectionId: target.connectionId }
-  const installed = window.api.fs.watchWorktree(args).catch(onError)
-  roots.set(key, { args, consumers: 1, installed })
-  return installed
+  const root: HeldWatchRoot = {
+    args: { worktreePath: target.worktreePath, connectionId: target.connectionId },
+    consumers: 1,
+    installed: Promise.resolve(),
+    failed: false
+  }
+  roots.set(key, root)
+  requestWatch(root, onError)
+  return root.installed
+}
+
+function requestWatch(root: HeldWatchRoot, onError: (error: unknown) => void): void {
+  root.failed = false
+  root.installed = window.api.fs.watchWorktree(root.args).catch((error: unknown) => {
+    root.failed = true
+    onError(error)
+  })
 }
 
 export function releaseWatchRoot(roots: HeldWatchRoots, target: EditorExternalWatchTarget): void {

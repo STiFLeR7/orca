@@ -31,12 +31,15 @@ function getFileConnectionId(file: OpenFile): string | undefined {
   return connectionId
 }
 
-/** True only when a local/SSH stat proves the tab's file is gone; runtime-owned files would stat the client path. */
-export async function probeEditorTabFileMissing(state: AppState, file: OpenFile): Promise<boolean> {
+/** What a local/SSH stat proves about the tab's file; runtime-owned files would stat the client path, so stay 'unknown'. */
+export async function probeEditorTabFilePresence(
+  state: AppState,
+  file: OpenFile
+): Promise<'present' | 'missing' | 'unknown'> {
   const owner = getRuntimeTargetForFileOwner(state, file.worktreeId, file.runtimeEnvironmentId)
-  // Why `!owner`: with no single owner, a client stat cannot prove the file gone.
+  // Why `!owner`: with no single owner, a client stat proves nothing.
   if (owner?.kind !== 'local') {
-    return false
+    return 'unknown'
   }
   try {
     const connectionId = getFileConnectionId(file)
@@ -46,10 +49,10 @@ export async function probeEditorTabFileMissing(state: AppState, file: OpenFile)
       connectionId,
       ...(access ? { access } : {})
     })
-    return exists === false
+    return exists === false ? 'missing' : exists === true ? 'present' : 'unknown'
   } catch {
     // Why: a failed probe can't disprove existence.
-    return false
+    return 'unknown'
   }
 }
 
@@ -105,7 +108,7 @@ export function attachRestoredTabConflictScan(store: AppStoreApi): () => void {
       if (disposed) {
         return
       }
-      if (await probeEditorTabFileMissing(store.getState(), file)) {
+      if ((await probeEditorTabFilePresence(store.getState(), file)) === 'missing') {
         if (disposed) {
           return
         }

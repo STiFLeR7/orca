@@ -238,6 +238,14 @@ describe('MarkdownPreview http link routing (Cmd vs Cmd+Shift click)', () => {
     )
   })
 
+  it('plain click on a vscode:// link hands it to the OS', () => {
+    const vscodeUrl = 'vscode://file/D:/src/project/Example.cs:120'
+    const anchor = render(`[Example.cs:120](${vscodeUrl})`, vscodeUrl)
+    click(anchor, {})
+    expect(openUrlMock).toHaveBeenCalledWith(vscodeUrl)
+    expect(createBrowserTabMock).not.toHaveBeenCalled()
+  })
+
   it('renders a raw HTML superscript citation and routes it like a Markdown link', () => {
     const source = '<sup><a href="https://example.com">[12]</a></sup>'
     const anchor = render(source)

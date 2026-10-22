@@ -9,3 +9,10 @@ export const EXTERNAL_EDITOR_URI_SCHEMES = EXTERNAL_EDITOR_URI_SCHEME_NAMES.map(
 export function isExternalEditorUriScheme(protocol: string): boolean {
   return (EXTERNAL_EDITOR_URI_SCHEMES as readonly string[]).includes(protocol)
 }
+
+// VS Code's documented file deep link is `vscode://file/<path>[:<line>[:<col>]]`;
+// any other authority targets an extension's own URI handler, which issue #31637
+// never asked to auto-open.
+export function isExternalEditorFileDeepLink(url: URL): boolean {
+  return isExternalEditorUriScheme(url.protocol) && url.hostname === 'file'
+}

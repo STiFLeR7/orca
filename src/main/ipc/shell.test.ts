@@ -200,6 +200,16 @@ describe('registerShellHandlers', () => {
     expect(openExternalMock).not.toHaveBeenCalled()
   })
 
+  it('rejects vscode editor links that target an extension handler instead of a file', async () => {
+    const handler = getHandler('shell:openUrl')
+
+    await handler({}, 'vscode://some-extension-id/do-something')
+    expect(openExternalMock).not.toHaveBeenCalled()
+
+    await handler({}, 'vscode-insiders://some-extension-id/do-something')
+    expect(openExternalMock).not.toHaveBeenCalled()
+  })
+
   it('picks several attachment files in one native dialog', async () => {
     showOpenDialogMock.mockResolvedValue({
       canceled: false,

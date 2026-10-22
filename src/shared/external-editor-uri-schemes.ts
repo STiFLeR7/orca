@@ -14,5 +14,11 @@ export function isExternalEditorUriScheme(protocol: string): boolean {
 // any other authority targets an extension's own URI handler, which issue #31637
 // never asked to auto-open.
 export function isExternalEditorFileDeepLink(url: URL): boolean {
-  return isExternalEditorUriScheme(url.protocol) && url.hostname === 'file'
+  return (
+    isExternalEditorUriScheme(url.protocol) &&
+    url.hostname === 'file' &&
+    url.username === '' &&
+    url.password === '' &&
+    url.port === ''
+  )
 }

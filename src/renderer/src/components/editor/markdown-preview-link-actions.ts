@@ -81,11 +81,34 @@ export async function handleMarkdownPreviewLinkClick({
     return
   }
 
+  const target = resolveMarkdownPreviewHref(href, filePath)
+
+  // Why: every click opens an editor link through the OS, so it skips the modifier routing.
+  if (target && isExternalEditorFileDeepLink(target)) {
+    if (sourceOwner.kind === 'unknown') {
+      return
+    }
+    if (
+      isLocalPathOpenBlocked(
+        getLinkSourceLocalOpenOwner(useAppStore.getState(), sourceOwner, sourceRoutingWorktreeId)
+      )
+    ) {
+      // Why: the link names a path on this computer, not on the document's remote host.
+      showLocalPathOpenBlockedToast()
+      return
+    }
+    try {
+      await window.api.shell.openUrl(target.toString())
+    } catch {
+      toast.error(translate('auto.lib.workspace.browser.tab.open.urlFailed', 'Unable to open URL.'))
+    }
+    return
+  }
+
   if (handleMarkdownPreviewSystemLinkClick({ event, href, filePath, context })) {
     return
   }
 
-  const target = resolveMarkdownPreviewHref(href, filePath)
   if (!target) {
     return
   }
@@ -95,11 +118,6 @@ export async function handleMarkdownPreviewLinkClick({
       target.toString(),
       resolveMarkdownPreviewHttpOpenOptions(event, isMac, sourceRoutingWorktreeId, sourceOwner)
     )
-    return
-  }
-
-  if (isExternalEditorFileDeepLink(target)) {
-    void window.api.shell.openUrl(target.toString())
     return
   }
 

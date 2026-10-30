@@ -238,12 +238,24 @@ describe('MarkdownPreview http link routing (Cmd vs Cmd+Shift click)', () => {
     )
   })
 
-  it('plain click on a vscode://file link hands it to the OS', () => {
+  it('hands a vscode://file link to the OS on plain and Cmd+Shift click', () => {
+    storeState.worktreesByRepo = {
+      repo: [{ id: 'wt-1', repoId: 'repo', path: '/repo', hostId: 'local', diffComments: [] }]
+    }
     const vscodeUrl = 'vscode://file/D:/src/project/Example.cs:120'
     const anchor = render(`[Example.cs:120](${vscodeUrl})`, vscodeUrl)
     click(anchor, {})
-    expect(openUrlMock).toHaveBeenCalledWith(vscodeUrl)
+    click(anchor, { metaKey: true, shiftKey: true })
+    expect(openUrlMock.mock.calls).toEqual([[vscodeUrl], [vscodeUrl]])
     expect(createBrowserTabMock).not.toHaveBeenCalled()
+  })
+
+  it('does not open a vscode://file link from an SSH document on this computer', () => {
+    connectionOwner.value = 'ssh-1'
+    const vscodeUrl = 'vscode://file/srv/repo/src/Example.cs:120'
+    const anchor = render(`[Example.cs:120](${vscodeUrl})`, vscodeUrl)
+    click(anchor, {})
+    expect(openUrlMock).not.toHaveBeenCalled()
   })
 
   it('does not auto-open a vscode:// link targeting an extension handler', () => {

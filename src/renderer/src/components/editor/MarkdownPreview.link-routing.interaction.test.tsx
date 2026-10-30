@@ -258,14 +258,6 @@ describe('MarkdownPreview http link routing (Cmd vs Cmd+Shift click)', () => {
     expect(openUrlMock).not.toHaveBeenCalled()
   })
 
-  it('does not auto-open a vscode:// link targeting an extension handler', () => {
-    const extensionUrl = 'vscode://some-extension-id/do-something'
-    const anchor = render(`[open](${extensionUrl})`, extensionUrl)
-    click(anchor, {})
-    expect(openUrlMock).not.toHaveBeenCalled()
-    expect(createBrowserTabMock).not.toHaveBeenCalled()
-  })
-
   it('renders a raw HTML superscript citation and routes it like a Markdown link', () => {
     const source = '<sup><a href="https://example.com">[12]</a></sup>'
     const anchor = render(source)

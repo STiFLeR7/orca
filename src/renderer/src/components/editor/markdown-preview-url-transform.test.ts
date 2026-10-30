@@ -23,5 +23,7 @@ describe('markdownPreviewUrlTransform', () => {
     expect(
       markdownPreviewUrlTransform('vscode-insiders://file/D:/src/project/Example.cs:120', 'href')
     ).toBe('vscode-insiders://file/D:/src/project/Example.cs:120')
+    expect(markdownPreviewUrlTransform('vscode://publisher.extension/do', 'href')).toBe('')
+    expect(markdownPreviewUrlTransform('vscode://file/tmp/example.png', 'src')).toBe('')
   })
 })

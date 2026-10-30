@@ -1,11 +1,12 @@
 import { defaultUrlTransform } from 'react-markdown'
-import { hasExternalEditorUriScheme } from '../../../../shared/external-editor-uri-schemes'
+import { isExternalEditorFileDeepLinkHref } from '../../../../shared/external-editor-uri-schemes'
 
 export function markdownPreviewUrlTransform(value: string, key: string): string {
   if ((key === 'href' || key === 'src') && value.toLowerCase().startsWith('file:')) {
     return value
   }
-  if (key === 'href' && hasExternalEditorUriScheme(value)) {
+  // Why: other editor authorities reach extension URI handlers, so they never become links.
+  if (key === 'href' && isExternalEditorFileDeepLinkHref(value)) {
     return value
   }
 

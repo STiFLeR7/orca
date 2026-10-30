@@ -250,6 +250,16 @@ describe('MarkdownPreview http link routing (Cmd vs Cmd+Shift click)', () => {
     expect(createBrowserTabMock).not.toHaveBeenCalled()
   })
 
+  it('keeps a stripped vscode extension link from reloading the window', () => {
+    const anchor = render('[ext](vscode://publisher.extension/do)', '')
+    const event = new window.MouseEvent('click', { bubbles: true, cancelable: true })
+    act(() => {
+      anchor.dispatchEvent(event)
+    })
+    expect(event.defaultPrevented).toBe(true)
+    expect(openUrlMock).not.toHaveBeenCalled()
+  })
+
   it('does not open a vscode://file link from an SSH document on this computer', () => {
     connectionOwner.value = 'ssh-1'
     const vscodeUrl = 'vscode://file/srv/repo/src/Example.cs:120'

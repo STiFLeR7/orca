@@ -30,7 +30,9 @@ it.each([
   ['vscode-insiders://some-extension-id/do-something', null],
   ['vscode://user@file/D:/src/project/Example.cs:120', null],
   ['vscode://user:pass@file/D:/src/project/Example.cs:120', null],
-  ['vscode://file:8080/D:/src/project/Example.cs:120', null]
+  ['vscode://file:8080/D:/src/project/Example.cs:120', null],
+  ['vscode://file/tmp/example.ts?continueOn=1', null],
+  ['vscode://file/tmp/example.ts#L1', null]
 ])('routes %s only when it is an allowed external URL', async (url, expected) => {
   registerShellHandlers({ getSshTarget: () => undefined })
   const handler = handleMock.mock.calls.find(([channel]) => channel === 'shell:openUrl')?.[1]

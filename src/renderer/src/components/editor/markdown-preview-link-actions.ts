@@ -55,11 +55,11 @@ export async function handleMarkdownPreviewLinkClick({
   filePath: string
   context: MarkdownPreviewLinkContext
 }): Promise<void> {
+  // Why: an empty href (a stripped URL) would otherwise reload the Orca window.
+  event.preventDefault()
   if (!href) {
     return
   }
-
-  event.preventDefault()
 
   const {
     isMac,

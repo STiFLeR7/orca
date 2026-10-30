@@ -4,7 +4,7 @@ import {
   readDataFile,
   testState,
   writeDataFile
-} from './persistence-test-harness'
+} from './persistence/persistence-test-harness'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import * as crypto from 'node:crypto'
 import { mkdtempSync, rmSync } from 'node:fs'
@@ -32,9 +32,9 @@ afterEach(async () => {
 
 describe('persisted onboarding language cohorts', () => {
   it.each([
-    { draw: 0, cohort: 'control', language: 'en' },
-    { draw: 1, cohort: 'treatment', language: 'system' }
-  ])('retains $cohort through settings changes and restart', async ({ draw, cohort, language }) => {
+    { draw: 0, cohort: 'control' },
+    { draw: 1, cohort: 'treatment' }
+  ])('retains $cohort through settings changes and restart', async ({ draw, cohort }) => {
     vi.mocked(crypto.randomInt).mockImplementation(() => draw)
     const store = createStore()
     const telemetry = store.getSettings().telemetry
@@ -42,9 +42,10 @@ describe('persisted onboarding language cohorts', () => {
       throw new Error('Fresh profile has no telemetry settings')
     }
     expect(telemetry.onboardingLanguageCohort).toBe(cohort)
-    expect(store.getSettings().uiLanguage).toBe(language)
+    expect(store.getSettings().uiLanguage).toBe('system')
     store.flush()
     expect(readDataFile()).toHaveProperty('settings.telemetry.onboardingLanguageCohort', cohort)
+    expect(readDataFile()).toHaveProperty('settings.uiLanguage', 'system')
 
     store.updateSettings({ uiLanguage: 'fr' })
     store.updateSettings({ telemetry: { ...telemetry, optedIn: false } })

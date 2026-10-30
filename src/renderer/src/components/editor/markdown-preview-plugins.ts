@@ -14,6 +14,7 @@ import {
   GITHUB_CALLOUT_SANITIZE_ATTRIBUTE,
   remarkGitHubCallouts
 } from '@/lib/remark-github-callouts'
+import { remarkAutolinkLiteralProseBoundary } from '@/lib/remark-autolink-literal-prose-boundary'
 import { EXTERNAL_EDITOR_URI_SCHEME_NAMES } from '../../../../shared/external-editor-uri-schemes'
 
 const markdownPreviewSanitizeSchema = {
@@ -63,6 +64,7 @@ const markdownPreviewSanitizeSchema = {
 type MarkdownPluginList = NonNullable<ReactMarkdownOptions['remarkPlugins']>
 export const MARKDOWN_REMARK_PLUGINS: MarkdownPluginList = [
   remarkGfm,
+  remarkAutolinkLiteralProseBoundary,
   remarkCjkFriendly,
   remarkGitHubCallouts,
   remarkBreaks,

@@ -12,17 +12,17 @@ afterEach(() => vi.resetAllMocks())
 
 describe('onboarding language experiment', () => {
   it.each([
-    { draw: 0, cohort: 'control', language: 'en' },
-    { draw: 1, cohort: 'treatment', language: 'system' }
+    { draw: 0, cohort: 'control' },
+    { draw: 1, cohort: 'treatment' }
   ])(
-    'assigns and freezes the $cohort experience for a new install',
-    ({ draw, cohort, language }) => {
+    'assigns and freezes the $cohort experience with the system language for a new install',
+    ({ draw, cohort }) => {
       vi.mocked(crypto.randomInt).mockImplementation(() => draw)
       const runtime = { loadNeedsSave: false }
       const migration = new LoadedCohortMigrationOperations(runtime)
       const fresh = migration.migrateTelemetry(getDefaultPersistedState('/test'), false)
       expect(fresh.settings.telemetry?.onboardingLanguageCohort).toBe(cohort)
-      expect(fresh.settings.uiLanguage).toBe(language)
+      expect(fresh.settings.uiLanguage).toBe('system')
       expect(runtime.loadNeedsSave).toBe(true)
       const reopened = migration.migrateTelemetry(JSON.parse(JSON.stringify(fresh)), true)
       expect(reopened).toEqual(fresh)

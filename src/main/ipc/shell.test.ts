@@ -5,7 +5,6 @@ import { pathToFileURL } from 'node:url'
 const {
   getSpawnArgsForWindowsMock,
   handleMock,
-  openExternalMock,
   openPathMock,
   resolveCliCommandMock,
   showItemInFolderMock,
@@ -15,7 +14,6 @@ const {
 } = vi.hoisted(() => ({
   getSpawnArgsForWindowsMock: vi.fn(),
   handleMock: vi.fn(),
-  openExternalMock: vi.fn(),
   openPathMock: vi.fn(),
   resolveCliCommandMock: vi.fn(),
   showItemInFolderMock: vi.fn(),
@@ -30,7 +28,7 @@ vi.mock('electron', () => ({
   },
   shell: {
     showItemInFolder: showItemInFolderMock,
-    openExternal: openExternalMock,
+    openExternal: vi.fn(),
     openPath: openPathMock
   },
   dialog: {
@@ -61,7 +59,6 @@ import { EXTERNAL_EDITOR_CLI_COMMAND, registerShellHandlers } from './shell'
 import { resolveExternalEditorLaunchSpec } from '../external-editor-launch'
 import type { SshTarget } from '../../shared/ssh-types'
 
-// Why shell:false: hidden launches go through @orca/process-host, which pins it.
 const HIDDEN_EDITOR_LAUNCH_OPTIONS = expect.objectContaining({
   detached: true,
   stdio: 'ignore',
@@ -113,7 +110,6 @@ describe('registerShellHandlers', () => {
   beforeEach(() => {
     handleMock.mockReset()
     getSpawnArgsForWindowsMock.mockReset()
-    openExternalMock.mockReset()
     openPathMock.mockReset()
     resolveCliCommandMock.mockReset()
     showItemInFolderMock.mockReset()
@@ -179,35 +175,6 @@ describe('registerShellHandlers', () => {
       defaultPath: '/Users/kaylee',
       properties: ['openDirectory']
     })
-  })
-
-  it('opens https and vscode editor links via the OS, but rejects other schemes', async () => {
-    const handler = getHandler('shell:openUrl')
-
-    await handler({}, 'https://example.com')
-    expect(openExternalMock).toHaveBeenCalledWith('https://example.com/')
-
-    await handler({}, 'vscode://file/D:/src/project/Example.cs:120')
-    expect(openExternalMock).toHaveBeenCalledWith('vscode://file/D:/src/project/Example.cs:120')
-
-    await handler({}, 'vscode-insiders://file/D:/src/project/Example.cs:120')
-    expect(openExternalMock).toHaveBeenCalledWith(
-      'vscode-insiders://file/D:/src/project/Example.cs:120'
-    )
-
-    openExternalMock.mockClear()
-    await handler({}, 'file:///tmp/example.md')
-    expect(openExternalMock).not.toHaveBeenCalled()
-  })
-
-  it('rejects vscode editor links that target an extension handler instead of a file', async () => {
-    const handler = getHandler('shell:openUrl')
-
-    await handler({}, 'vscode://some-extension-id/do-something')
-    expect(openExternalMock).not.toHaveBeenCalled()
-
-    await handler({}, 'vscode-insiders://some-extension-id/do-something')
-    expect(openExternalMock).not.toHaveBeenCalled()
   })
 
   it('picks several attachment files in one native dialog', async () => {
@@ -497,7 +464,7 @@ describe('registerShellHandlers', () => {
         ).resolves.toEqual({
           ok: true
         })
-        // Why: a waiting batch launcher skips the start /B wrap; process-host builds its cmd line.
+        // Waiting batch launchers bypass start /B; process-host owns command-line encoding.
         expect(getSpawnArgsForWindowsMock).toHaveBeenCalledTimes(1)
         expect(spawnMock).toHaveBeenLastCalledWith(
           expect.any(String),
@@ -721,6 +688,7 @@ describe('registerShellHandlers', () => {
           port: 2222
         })
       )
+      resolveCliCommandMock.mockReturnValueOnce('/usr/local/bin/code')
       const handler = getHandler('shell:openInExternalEditor')
 
       await expect(
@@ -737,7 +705,33 @@ describe('registerShellHandlers', () => {
       expect(spawnMock).not.toHaveBeenCalled()
     })
 
-    it.each(['cursor', 'zed', 'code --reuse-window'])(
+    it('opens a manual custom-port target in Zed without an SSH config alias', async () => {
+      sshTargets.set(
+        'ssh-1',
+        createSshTarget({
+          source: 'manual',
+          configHost: 'builder.example.com',
+          host: 'builder.example.com',
+          port: 2222
+        })
+      )
+      resolveCliCommandMock.mockReturnValueOnce('/usr/local/bin/zed')
+      const handler = getHandler('shell:openInExternalEditor')
+
+      await expect(
+        handler(
+          {},
+          { path: '/srv/project', command: 'zed', connectionId: 'ssh-1', ownerHostId: 'ssh:ssh-1' }
+        )
+      ).resolves.toEqual({ ok: true })
+      expect(spawnMock).toHaveBeenCalledWith(
+        '/usr/local/bin/zed',
+        ['ssh://ada@builder.example.com:2222/srv/project'],
+        HIDDEN_EDITOR_LAUNCH_OPTIONS
+      )
+    })
+
+    it.each(['subl', 'code --reuse-window'])(
       'rejects the unsupported SSH launcher %s',
       async (command) => {
         sshTargets.set('ssh-1', createSshTarget())

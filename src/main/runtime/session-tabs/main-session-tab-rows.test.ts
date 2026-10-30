@@ -302,8 +302,8 @@ describe('session.tabs rows from main (layout-owner build)', () => {
     expect(merged).toMatchObject({ activeGroupId: 'g2', activeTabId: 'b1' })
   })
 
-  it("takes a markdown edit view's dirty state from the window", () => {
-    const markdown = (isDirty: boolean) => ({
+  it("takes a markdown edit view's dirty state and untitled flag from the window", () => {
+    const markdown = (isDirty: boolean, isUntitled?: true) => ({
       type: 'markdown' as const,
       id: 'm1',
       title: 'README.md',
@@ -316,14 +316,16 @@ describe('session.tabs rows from main (layout-owner build)', () => {
       sourceRelativePath: 'README.md',
       documentVersion: 'file:/wt/README.md',
       isDirty,
-      isActive: false
+      isActive: false,
+      ...(isUntitled ? { isUntitled } : {})
     })
     const merged = withMainSessionTabRows(
-      windowSnapshot([markdown(true)], ['m1'], 'm1'),
+      windowSnapshot([markdown(true, true)], ['m1'], 'm1'),
       mainProjection([markdown(false)], ['m1'], 'm1'),
       NONE_EXITED
     )
 
-    expect(merged.tabs[0]).toMatchObject({ id: 'm1', isDirty: true })
+    // Why: the saved session never records untitled, and the phone keeps such a tab read-only.
+    expect(merged.tabs[0]).toMatchObject({ id: 'm1', isDirty: true, isUntitled: true })
   })
 })

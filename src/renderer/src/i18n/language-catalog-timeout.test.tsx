@@ -10,15 +10,6 @@ import { I18nProvider } from './I18nProvider'
 import { i18n } from './i18n'
 import { useLanguageReadiness } from './language-readiness'
 
-const { catalog } = vi.hoisted(() => {
-  let finish: (value: { default: Record<string, unknown> }) => void = () => {}
-  const promise = new Promise<{ default: Record<string, unknown> }>((resolve) => {
-    finish = resolve
-  })
-  return { catalog: { promise, finish } }
-})
-vi.mock('./locales/fr.json', () => catalog.promise)
-
 afterEach(() => {
   cleanup()
   useAppStore.setState(useAppStore.getInitialState(), true)
@@ -30,6 +21,19 @@ it('releases onboarding in English when a catalog stalls, ignores its late resul
   vi.useFakeTimers()
   vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true)
   Object.defineProperty(window, 'api', { configurable: true, value: {} })
+  let finishCatalog: (response: Response) => void = () => {}
+  const catalog = new Promise<Response>((resolve) => {
+    finishCatalog = resolve
+  })
+  vi.stubGlobal(
+    'fetch',
+    vi
+      .fn()
+      .mockReturnValueOnce(catalog)
+      .mockImplementation(() =>
+        Promise.resolve(new Response(JSON.stringify({ menu: { file: 'Fichier' } })))
+      )
+  )
   usePluginLanguagePackStore.setState({ entries: [], loaded: true })
   useAppStore.setState({ settings: { ...getDefaultSettings('/tmp'), uiLanguage: 'fr' } })
   useLanguageReadiness.setState({ ready: false, error: false })
@@ -53,8 +57,8 @@ it('releases onboarding in English when a catalog stalls, ignores its late resul
   expect(useAppStore.getState().settings?.uiLanguage).toBe('fr')
   expect(i18n.language).toBe('en')
   await act(async () => {
-    catalog.finish({ default: { menu: { file: 'Fichier' } } })
-    await import('./locales/fr.json')
+    finishCatalog(new Response(JSON.stringify({ menu: { file: 'Fichier' } })))
+    await catalog
     await vi.advanceTimersByTimeAsync(0)
   })
   expect(i18n.language).toBe('en')

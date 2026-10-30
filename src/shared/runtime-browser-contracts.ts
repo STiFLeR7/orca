@@ -17,6 +17,25 @@ export type BrowserSnapshotResult = {
   title: string
 }
 
+/** What an agent's page action caused; absent for people's input and from runtimes that predate it. */
+export type BrowserActionEffects = {
+  /** Set only when the action changed them. */
+  url?: string
+  title?: string
+  /** A navigation was still loading at the settle cap, so no page changes are listed. */
+  loading?: boolean
+  loadError?: string
+  /** No browserPageId: the tab was requested but had not opened by the settle cap. */
+  newTabs?: { browserPageId?: string; url: string }[]
+  popups?: { action: 'blocked' | 'opened-external' | 'window'; origin: string }[]
+  downloads?: { filename: string; origin: string }[]
+  consoleErrors?: string[]
+  /** Snapshot lines changed since the last reading; `full` is the whole new tree. Absent when unread. */
+  page?: 'unchanged' | { lines: string[]; removedLines: number; full: boolean; truncated: boolean }
+  /** False when the page was still changing at the settle cap. */
+  settled: boolean
+}
+
 export type BrowserClickResult = { clicked: string }
 export type BrowserGotoResult = { url: string; title: string }
 export type BrowserFillResult = { filled: string }
@@ -88,7 +107,10 @@ export type BrowserTabProfileCloneResult = {
   profileLabel: string | null
 }
 
-export type BrowserProfileListResult = { profiles: BrowserSessionProfile[] }
+export type BrowserProfileListResult = {
+  profiles: BrowserSessionProfile[]
+  executorRuntimeId?: string
+}
 export type BrowserProfileCreateResult = { profile: BrowserSessionProfile | null }
 export type BrowserProfileDeleteResult = { deleted: boolean; profileId: string }
 export type BrowserDetectedProfileInfo = { name: string; directory: string }
@@ -101,7 +123,9 @@ export type BrowserDetectedInfo = {
 }
 
 export type BrowserDetectProfilesResult = { browsers: BrowserDetectedInfo[] }
-export type BrowserProfileImportFromBrowserResult = BrowserCookieImportResult
+export type BrowserProfileImportFromBrowserResult = BrowserCookieImportResult & {
+  executorRuntimeId?: string
+}
 export type BrowserProfileClearDefaultCookiesResult = { cleared: boolean }
 export type BrowserHoverResult = { hovered: string }
 export type BrowserDragResult = { dragged: { from: string; to: string } }
@@ -156,7 +180,7 @@ export type BrowserInterceptDisableResult = { disabled: boolean }
 export type BrowserConsoleEntry = {
   level: string
   text: string
-  timestamp: number
+  timestamp?: number
   url?: string
   line?: number
 }
@@ -166,10 +190,11 @@ export type BrowserConsoleResult = { entries: BrowserConsoleEntry[]; truncated: 
 export type BrowserNetworkEntry = {
   url: string
   method: string
-  status: number
-  mimeType: string
-  size: number
-  timestamp: number
+  // Absent while a request is pending or after it failed.
+  status?: number
+  mimeType?: string
+  size?: number
+  timestamp?: number
 }
 
 export type BrowserNetworkLogResult = { entries: BrowserNetworkEntry[]; truncated: boolean }

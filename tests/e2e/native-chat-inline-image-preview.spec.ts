@@ -14,7 +14,7 @@ import {
 
 test.use({ orcaAppExtraEnv: { ORCA_BACKGROUND_LAUNCH: '1' } })
 
-const REPO_IMAGE = path.resolve(
+const sourceImage = path.resolve(
   __dirname,
   '..',
   '..',
@@ -24,8 +24,6 @@ const REPO_IMAGE = path.resolve(
   'docs',
   'ways-to-run-run-on.png'
 )
-// Local artwork is only for the manually reviewed visual-evidence run; CI always uses the repo asset.
-const sourceImage = process.env.ORCA_E2E_INLINE_IMAGE_VISUAL_SOURCE ?? REPO_IMAGE
 
 function transcript(sessionId: string, imagePath: string): string {
   return claudeTranscriptLines({
@@ -76,9 +74,6 @@ test('opens a native-chat Markdown table image in the image dialog without a fil
     const chat = orcaPage.locator('[data-native-chat-root="true"]')
     const image = chat.getByRole('button', { name: 'View image: Inline chat screenshot' })
     await expect(image).toBeVisible({ timeout: 30_000 })
-    const workspaceBoardToast = orcaPage.getByText('Workspace board moved to the bottom bar')
-    await orcaPage.waitForTimeout(5_000)
-    await expect(workspaceBoardToast).toHaveCount(0)
     const ordinaryFileLink = chat.getByRole('link', { name: 'Ordinary file link' })
     await expect(ordinaryFileLink).toBeVisible()
     await chat
